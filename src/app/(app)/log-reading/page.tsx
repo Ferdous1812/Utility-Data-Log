@@ -1,0 +1,484 @@
+'use client';
+
+import React, { useState, useEffect, useCallback } from 'react';
+import { createClient } from '@/lib/supabase/client';
+import { logReading } from '@/lib/actions';
+import { Input } from '@/components/ui/Input';
+import { Button } from '@/components/ui/Button';
+import { Card } from '@/components/ui/Card';
+import { Badge } from '@/components/ui/Badge';
+import { useToast } from '@/components/ui/Toast';
+import { format, subDays } from 'date-fns';
+import type { Meter, Reading, MeterSection } from '@/lib/types';
+
+interface MeterRow {
+  meter: Meter;
+  previousReadingValue: number; // 0 if no previous reading exists
+  previousReadingDate: string | null; // N/A if no previous reading exists
+  currentValue: string;
+}
+
+export default function LogReadingPage() {
+  const supabase = createClient();
+  const { addToast } = useToast();
+
+  const todayStr = format(new Date(), 'yyyy-MM-dd');
+  const yesterdayStr = format(subDays(new Date(), 1), 'yyyy-MM-dd');
+
+  // Dual Selectable Dates:
+  // 1. Target Previous Reading Date (user selectable)
+  // 2. Current Reading Date (defaults to today)
+  const [selectedPreviousDate, setSelectedPreviousDate] = useState(yesterdayStr);
+  const [currentReadingDate, setCurrentReadingDate] = useState(todayStr);
+
+  const [meters, setMeters] = useState<Meter[]>([]);
+  const [sections, setSections] = useState<MeterSection[]>([]);
+  const [rows, setRows] = useState<MeterRow[]>([]);
+  const [loadingMeters, setLoadingMeters] = useState(true);
+  const [loadingPrevious, setLoadingPrevious] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [submittedIds, setSubmittedIds] = useState<Set<string>>(new Set());
+
+  // Fetch active meters & sections
+  useEffect(() => {
+    async function fetchMetersAndSections() {
+      const [metersRes, sectionsRes] = await Promise.all([
+        supabase
+          .from('meters')
+          .select('*')
+          .eq('is_active', true)
+          .order('sort_order', { ascending: true })
+          .order('type')
+          .order('name'),
+        supabase
+          .from('meter_sections')
+          .select('*')
+          .order('sort_order', { ascending: true }),
+      ]);
+      setMeters((metersRes.data || []) as Meter[]);
+      setSections((sectionsRes.data || []) as MeterSection[]);
+      setLoadingMeters(false);
+    }
+    fetchMetersAndSections();
+  }, [supabase]);
+
+  // Smart "Previous Reading" Fetching Logic:
+  // 1. Searches on or before selectedPreviousDate for the closest previous reading.
+  // 2. If the chosen selectedPreviousDate has a reading, fetch it directly.
+  // 3. If selectedPreviousDate has no reading, fetch the nearest preceding reading before that date.
+  // 4. If no reading exists at all before that date, return 0 for Previous KWH and N/A for date.
+  const fetchPreviousReadings = useCallback(async () => {
+    if (meters.length === 0) return;
+    setLoadingPrevious(true);
+
+    const newRows: MeterRow[] = [];
+
+    for (const meter of meters) {
+      const { data } = await supabase
+        .from('readings')
+        .select('*')
+        .eq('meter_id', meter.id)
+        .lte('reading_date', selectedPreviousDate)
+        .order('reading_date', { ascending: false })
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      const prevReading = data as Reading | null;
+
+      newRows.push({
+        meter,
+        previousReadingValue: prevReading ? Number(prevReading.reading_value) : 0,
+        previousReadingDate: prevReading ? prevReading.reading_date : null,
+        currentValue: '',
+      });
+    }
+
+    setRows(newRows);
+    setSubmittedIds(new Set());
+    setLoadingPrevious(false);
+  }, [meters, selectedPreviousDate, supabase]);
+
+  useEffect(() => {
+    fetchPreviousReadings();
+  }, [fetchPreviousReadings]);
+
+  // Update inline Current KWh value
+  const updateCurrentValue = (meterId: string, value: string) => {
+    setRows((prev) =>
+      prev.map((r) =>
+        r.meter.id === meterId ? { ...r, currentValue: value } : r
+      )
+    );
+  };
+
+  // Calculate Consumption: Present (Current KWh) - Previous Value
+  const getConsumption = (row: MeterRow): number | null => {
+    if (!row.currentValue.trim()) return null;
+    const current = parseFloat(row.currentValue);
+    if (isNaN(current)) return null;
+    return current - row.previousReadingValue;
+  };
+
+  // Submit filled rows
+  const handleSubmitAll = async () => {
+    const filledRows = rows.filter(
+      (r) => r.currentValue.trim() !== '' && !submittedIds.has(r.meter.id)
+    );
+
+    if (filledRows.length === 0) {
+      addToast('error', 'Please enter at least one Current KWh value.');
+      return;
+    }
+
+    for (const row of filledRows) {
+      const val = parseFloat(row.currentValue);
+      if (isNaN(val) || val < 0) {
+        addToast('error', `Invalid reading for "${row.meter.name}". Must be a non-negative number.`);
+        return;
+      }
+    }
+
+    setSubmitting(true);
+    let successCount = 0;
+    let failCount = 0;
+    const newSubmitted = new Set(submittedIds);
+
+    for (const row of filledRows) {
+      const result = await logReading({
+        meter_id: row.meter.id,
+        reading_value: parseFloat(row.currentValue),
+        reading_date: currentReadingDate,
+      });
+
+      if (result.success) {
+        successCount++;
+        newSubmitted.add(row.meter.id);
+      } else {
+        failCount++;
+        addToast('error', `${row.meter.name}: ${result.message}`);
+      }
+    }
+
+    setSubmittedIds(newSubmitted);
+    setSubmitting(false);
+
+    if (successCount > 0) {
+      addToast(
+        'success',
+        `${successCount} reading${successCount > 1 ? 's' : ''} logged successfully!${
+          failCount > 0 ? ` (${failCount} failed)` : ''
+        }`
+      );
+    }
+  };
+
+  // Meter Groups
+  const incomingRows = rows.filter(
+    (r) => r.meter.type === 'incoming' || r.meter.type === 'main'
+  );
+  const outgoingMainRows = rows.filter(
+    (r) => r.meter.type === 'outgoing_main' || r.meter.type === 'outgoing'
+  );
+  const outgoingSubRows = rows.filter(
+    (r) => r.meter.type === 'outgoing_sub' || r.meter.type === 'submeter'
+  );
+  const outgoingSubSubRows = rows.filter(
+    (r) => r.meter.type === 'outgoing_sub_sub'
+  );
+
+  const filledCount = rows.filter(
+    (r) => r.currentValue.trim() !== '' && !submittedIds.has(r.meter.id)
+  ).length;
+
+  return (
+    <div className="max-w-7xl mx-auto space-y-6">
+      {/* Header */}
+      <div>
+        <h1 className="text-2xl font-bold text-text-primary">Log Readings</h1>
+        <p className="text-sm text-text-secondary mt-1">
+          Select target Previous Reading Date &amp; Current Reading Date, then enter Current KWh.
+        </p>
+      </div>
+
+      {/* Selectable Dual Date Inputs Card */}
+      <Card className="py-3.5 px-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <Input
+              label="Select Target Previous Reading Date"
+              type="date"
+              value={selectedPreviousDate}
+              onChange={(e) => setSelectedPreviousDate(e.target.value)}
+              icon={
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <circle cx="12" cy="12" r="10" />
+                  <polyline points="12 6 12 12 16 14" />
+                </svg>
+              }
+            />
+            <p className="text-[11px] text-text-muted mt-1">
+              📅 Fetches the reading on this date, or the nearest previous date.
+            </p>
+          </div>
+
+          <div>
+            <Input
+              label="Current Reading Date"
+              type="date"
+              value={currentReadingDate}
+              onChange={(e) => setCurrentReadingDate(e.target.value)}
+              icon={
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+                  <line x1="16" y1="2" x2="16" y2="6" />
+                  <line x1="8" y1="2" x2="8" y2="6" />
+                  <line x1="3" y1="10" x2="21" y2="10" />
+                </svg>
+              }
+            />
+            <p className="text-[11px] text-text-muted mt-1">
+              ⚡ Date assigned to new current readings (auto-filled to today).
+            </p>
+          </div>
+        </div>
+      </Card>
+
+      {/* Main Table View */}
+      <Card className="p-0 overflow-hidden">
+        {loadingMeters || loadingPrevious ? (
+          <div className="flex items-center justify-center py-16">
+            <div className="w-8 h-8 border-2 border-accent border-t-transparent rounded-full animate-spin" />
+            <span className="ml-3 text-sm text-text-muted">Fetching previous readings...</span>
+          </div>
+        ) : rows.length === 0 ? (
+          <div className="text-center py-16 text-text-muted">
+            <p className="text-sm">No meters configured yet</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto max-h-[calc(100vh-280px)] relative">
+            <table className="w-full text-sm border-separate border-spacing-0">
+              <thead className="sticky top-0 z-20 bg-bg-elevated shadow-sm">
+                <tr className="border-b border-border">
+                  <th className="sticky left-0 z-30 bg-bg-elevated px-4 py-3 text-left font-semibold text-text-secondary text-sm w-[260px] border-b border-border">Meter Name</th>
+                  <th className="px-4 py-3 text-center font-semibold text-text-secondary text-sm border-b border-border">Previous Reading Date</th>
+                  <th className="px-4 py-3 text-right font-semibold text-text-secondary text-sm border-b border-border">Previous Reading</th>
+                  <th className="px-4 py-3 text-center font-semibold text-text-secondary text-sm border-b border-border">Current Reading Date</th>
+                  <th className="px-4 py-3 text-center font-semibold text-accent text-sm w-[180px] border-b border-border">Current Reading</th>
+                  <th className="px-4 py-3 text-right font-semibold text-text-secondary text-sm border-b border-border">Difference</th>
+                </tr>
+              </thead>
+              <tbody>
+                {sections.length > 0 ? (
+                  sections.map((sec) => {
+                    const secRows = rows.filter((r) => r.meter.section_id === sec.id);
+                    if (secRows.length === 0) return null;
+
+                    const secIncoming = secRows.filter((r) => r.meter.type === 'incoming' || r.meter.type === 'main');
+                    const secOutgoingMain = secRows.filter((r) => r.meter.type === 'outgoing_main' || r.meter.type === 'outgoing');
+                    const secOutgoingSub = secRows.filter((r) => r.meter.type === 'outgoing_sub' || r.meter.type === 'submeter');
+                    const secOutgoingSubSub = secRows.filter((r) => r.meter.type === 'outgoing_sub_sub');
+
+                    return (
+                      <React.Fragment key={sec.id}>
+                        {/* Section Header Banner */}
+                        <tr className="bg-bg-elevated/80 border-y-2 border-border h-11">
+                          <td colSpan={6} className="px-4 py-2.5 font-extrabold text-sm text-text-primary tracking-wide bg-bg-elevated/90">
+                            <div className="flex items-center gap-2">
+                              <span className="text-lg">{sec.icon}</span>
+                              <span>{sec.name}</span>
+                              <span className="text-xs font-normal text-text-muted">({secRows.length} meters)</span>
+                            </div>
+                          </td>
+                        </tr>
+                        {renderGroup('Incoming Meters', 'warning', secIncoming)}
+                        {renderGroup('Outgoing Meters (Main)', 'accent', secOutgoingMain)}
+                        {renderGroup('Outgoing Meters (Sub)', 'success', secOutgoingSub)}
+                        {renderGroup('Sub of Sub Outgoing', 'danger', secOutgoingSubSub)}
+                      </React.Fragment>
+                    );
+                  })
+                ) : (
+                  <>
+                    {renderGroup('⚡ Incoming Meters', 'warning', incomingRows)}
+                    {renderGroup('⚡ Outgoing Meters (Main)', 'accent', outgoingMainRows)}
+                    {renderGroup('📊 Outgoing Meters (Sub)', 'success', outgoingSubRows)}
+                    {renderGroup('📊 Sub of Sub Outgoing', 'danger', outgoingSubSubRows)}
+                  </>
+                )}
+
+                {/* Uncategorized Meters if any */}
+                {rows.some((r) => !r.meter.section_id && sections.length > 0) && (
+                  <>
+                    <tr className="bg-bg-elevated/80 border-y-2 border-border h-11">
+                      <td colSpan={6} className="px-4 py-2.5 font-extrabold text-sm text-text-muted tracking-wide">
+                        📦 Uncategorized Meters
+                      </td>
+                    </tr>
+                    {renderGroup('Incoming Meters', 'warning', rows.filter((r) => !r.meter.section_id && (r.meter.type === 'incoming' || r.meter.type === 'main')))}
+                    {renderGroup('Outgoing Meters (Main)', 'accent', rows.filter((r) => !r.meter.section_id && (r.meter.type === 'outgoing_main' || r.meter.type === 'outgoing')))}
+                    {renderGroup('Outgoing Meters (Sub)', 'success', rows.filter((r) => !r.meter.section_id && (r.meter.type === 'outgoing_sub' || r.meter.type === 'submeter')))}
+                    {renderGroup('Sub of Sub Outgoing', 'danger', rows.filter((r) => !r.meter.section_id && r.meter.type === 'outgoing_sub_sub'))}
+                  </>
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Card>
+
+      {/* Sticky Bottom Bar */}
+      {rows.length > 0 && (
+        <div className="flex items-center justify-between bg-bg-surface border border-border rounded-[var(--radius-lg)] p-4 sticky bottom-4 z-10 backdrop-blur-sm bg-bg-surface/95">
+          <div className="text-sm text-text-secondary">
+            <span className="font-bold text-accent">{filledCount}</span> entry{filledCount !== 1 ? 'ies' : ''} ready to submit for <span className="font-bold text-text-primary">{format(new Date(currentReadingDate), 'dd MMM yyyy')}</span>
+            {submittedIds.size > 0 && (
+              <span className="text-success ml-2">
+                · {submittedIds.size} saved ✓
+              </span>
+            )}
+          </div>
+          <Button
+            variant="success"
+            size="lg"
+            loading={submitting}
+            disabled={filledCount === 0}
+            onClick={handleSubmitAll}
+            icon={
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                <polyline points="20 6 9 17 4 12" />
+              </svg>
+            }
+          >
+            Submit All Readings
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+
+  function getTypeLabel(type: string) {
+    if (type === 'incoming' || type === 'main') return 'Incoming';
+    if (type === 'outgoing_main' || type === 'outgoing') return 'Outgoing (Main)';
+    if (type === 'outgoing_sub_sub') return 'Sub of Sub';
+    return 'Outgoing (Sub)';
+  }
+
+  function renderGroup(
+    label: string,
+    color: 'warning' | 'accent' | 'success' | 'danger',
+    groupRows: MeterRow[]
+  ) {
+    if (groupRows.length === 0) return null;
+
+    const colorClasses = {
+      warning: 'bg-warning/10 border-warning/20 text-warning',
+      accent: 'bg-accent/10 border-accent/20 text-accent',
+      success: 'bg-success/10 border-success/20 text-success',
+      danger: 'bg-danger/10 border-danger/20 text-danger',
+    };
+
+    return (
+      <React.Fragment key={label}>
+        <tr className={`${colorClasses[color]} border-y h-10`}>
+          <td colSpan={6} className="px-4 py-2 font-bold text-xs uppercase tracking-wider">
+            {label} ({groupRows.length})
+          </td>
+        </tr>
+        {groupRows.map((row, idx) => {
+          const difference = getConsumption(row);
+          const isSubmitted = submittedIds.has(row.meter.id);
+          const isNegative = difference !== null && difference < 0;
+
+          return (
+            <tr
+              key={row.meter.id}
+              className={`h-14 border-b border-border/50 transition-colors ${
+                isSubmitted
+                  ? 'bg-success/5 opacity-60'
+                  : idx % 2 === 0
+                  ? 'bg-bg-surface'
+                  : 'bg-bg-primary/50'
+              }`}
+            >
+              {/* Meter Name (Sticky Column) with By-Line */}
+              <td className="sticky left-0 z-10 bg-bg-surface px-4 py-2.5 text-sm w-[260px]">
+                <div className="font-semibold text-text-primary text-sm leading-tight">
+                  {row.meter.name}
+                </div>
+                <div className="mt-0.5 text-[11px] text-text-muted flex items-center gap-1">
+                  <span>{getTypeLabel(row.meter.type)}</span>
+                  {row.meter.location && <span>· {row.meter.location}</span>}
+                </div>
+              </td>
+
+              {/* Previous Reading Date */}
+              <td className="px-4 py-2.5 text-center text-text-muted text-sm whitespace-nowrap">
+                {row.previousReadingDate
+                  ? format(new Date(row.previousReadingDate), 'dd MMM yyyy')
+                  : 'N/A'}
+              </td>
+
+              {/* Previous Reading */}
+              <td className="px-4 py-2.5 text-right tabular-nums text-sm font-medium text-text-primary">
+                {row.previousReadingValue.toLocaleString()}
+              </td>
+
+              {/* Current Reading Date */}
+              <td className="px-4 py-2.5 text-center text-text-secondary text-sm whitespace-nowrap font-medium">
+                {format(new Date(currentReadingDate), 'dd MMM yyyy')}
+              </td>
+
+              {/* Current Reading Input */}
+              <td className="px-4 py-2.5 text-center text-sm">
+                {isSubmitted ? (
+                  <div className="text-center font-bold text-success text-sm tabular-nums">
+                    {parseFloat(row.currentValue).toLocaleString()}
+                  </div>
+                ) : (
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    step="0.01"
+                    min="0"
+                    placeholder={`Enter ${
+                      (() => {
+                        const sec = sections.find((s) => s.id === row.meter.section_id);
+                        if (sec?.unit) return sec.unit;
+                        if (sec?.name?.toLowerCase().includes('gas')) return 'm³';
+                        if (sec?.name?.toLowerCase().includes('hour')) return 'hrs';
+                        return 'Reading';
+                      })()
+                    }`}
+                    value={row.currentValue}
+                    onChange={(e) => updateCurrentValue(row.meter.id, e.target.value)}
+                    className="w-full h-9 px-3 py-1 rounded-[var(--radius-md)] border border-border bg-bg-primary text-text-primary text-center font-semibold tabular-nums text-sm
+                      focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent
+                      placeholder:text-text-muted/50 placeholder:font-normal
+                      transition-all"
+                  />
+                )}
+              </td>
+
+              {/* Difference: Current Reading - Previous Reading */}
+              <td className="px-4 py-2.5 text-right tabular-nums text-sm font-semibold">
+                {difference !== null ? (
+                  <span
+                    className={`${
+                      isNegative ? 'text-danger' : 'text-accent'
+                    }`}
+                  >
+                    {isNegative && '⚠ '}
+                    {difference.toLocaleString()}
+                  </span>
+                ) : (
+                  <span className="text-text-muted text-sm">—</span>
+                )}
+              </td>
+            </tr>
+          );
+        })}
+      </React.Fragment>
+    );
+  }
+}
