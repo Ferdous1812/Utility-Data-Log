@@ -373,7 +373,7 @@ export default function SettingsPage() {
                   type="button"
                   disabled={idx === 0}
                   onClick={() => onMove('up')}
-                  className="text-text-muted hover:text-accent disabled:opacity-30 disabled:pointer-events-none p-1 rounded transition-colors"
+                  className="text-text-muted hover:text-accent hover:bg-accent/10 disabled:opacity-30 disabled:pointer-events-none p-1.5 rounded-md transition-colors"
                   title="Move Up"
                 >
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
@@ -384,7 +384,7 @@ export default function SettingsPage() {
                   type="button"
                   disabled={idx === siblingsCount - 1}
                   onClick={() => onMove('down')}
-                  className="text-text-muted hover:text-accent disabled:opacity-30 disabled:pointer-events-none p-1 rounded transition-colors"
+                  className="text-text-muted hover:text-accent hover:bg-accent/10 disabled:opacity-30 disabled:pointer-events-none p-1.5 rounded-md transition-colors"
                   title="Move Down"
                 >
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
@@ -396,7 +396,7 @@ export default function SettingsPage() {
             <button
               type="button"
               onClick={() => setEditingMeter(meter)}
-              className="text-text-muted hover:text-accent p-1.5 rounded transition-colors"
+              className="text-accent/80 hover:text-accent bg-accent/10 hover:bg-accent/20 p-1.5 rounded-md transition-colors"
               title="Edit Meter"
             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -407,7 +407,7 @@ export default function SettingsPage() {
             <button
               type="button"
               onClick={() => handleDeleteMeter(meter)}
-              className="text-text-muted hover:text-danger p-1.5 rounded transition-colors"
+              className="text-danger/80 hover:text-danger bg-danger/10 hover:bg-danger/20 p-1.5 rounded-md transition-colors"
               title="Delete Meter"
             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -795,60 +795,45 @@ export default function SettingsPage() {
                                 <button
                                   type="button"
                                   onClick={() => handleSort('name')}
-                                  className={`inline-flex items-center gap-1.5 hover:text-accent transition-colors focus:outline-none ${sortField === 'name' ? 'text-accent font-bold' : ''}`}
+                                  className={`hover:text-accent transition-colors focus:outline-none ${sortField === 'name' ? 'text-accent font-bold' : ''}`}
                                 >
-                                  <span>Meter Name</span>
-                                  <span className="text-xs opacity-70">
-                                    {sortField === 'name' ? (sortDirection === 'asc' ? '▲' : '▼') : '↕'}
-                                  </span>
+                                  Meter Name
                                 </button>
                               </th>
                               <th className="px-4 py-2.5 text-left font-semibold">
                                 <button
                                   type="button"
                                   onClick={() => handleSort('category')}
-                                  className={`inline-flex items-center gap-1.5 hover:text-accent transition-colors focus:outline-none ${sortField === 'category' ? 'text-accent font-bold' : ''}`}
+                                  className={`hover:text-accent transition-colors focus:outline-none ${sortField === 'category' ? 'text-accent font-bold' : ''}`}
                                 >
-                                  <span>Category</span>
-                                  <span className="text-xs opacity-70">
-                                    {sortField === 'category' ? (sortDirection === 'asc' ? '▲' : '▼') : '↕'}
-                                  </span>
+                                  Category
                                 </button>
                               </th>
                               <th className="px-4 py-2.5 text-left font-semibold">
                                 <button
                                   type="button"
                                   onClick={() => handleSort('location')}
-                                  className={`inline-flex items-center gap-1.5 hover:text-accent transition-colors focus:outline-none ${sortField === 'location' ? 'text-accent font-bold' : ''}`}
+                                  className={`hover:text-accent transition-colors focus:outline-none ${sortField === 'location' ? 'text-accent font-bold' : ''}`}
                                 >
-                                  <span>Location</span>
-                                  <span className="text-xs opacity-70">
-                                    {sortField === 'location' ? (sortDirection === 'asc' ? '▲' : '▼') : '↕'}
-                                  </span>
+                                  Location
                                 </button>
                               </th>
                               <th className="px-4 py-2.5 text-left font-semibold">
                                 <button
                                   type="button"
                                   onClick={() => handleSort('parent')}
-                                  className={`inline-flex items-center gap-1.5 hover:text-accent transition-colors focus:outline-none ${sortField === 'parent' ? 'text-accent font-bold' : ''}`}
+                                  className={`hover:text-accent transition-colors focus:outline-none ${sortField === 'parent' ? 'text-accent font-bold' : ''}`}
                                 >
-                                  <span>Parent (Mother)</span>
-                                  <span className="text-xs opacity-70">
-                                    {sortField === 'parent' ? (sortDirection === 'asc' ? '▲' : '▼') : '↕'}
-                                  </span>
+                                  Parent (Mother)
                                 </button>
                               </th>
                               <th className="px-4 py-2.5 text-center font-semibold">
                                 <button
                                   type="button"
                                   onClick={() => handleSort('mf')}
-                                  className={`inline-flex items-center gap-1.5 hover:text-accent transition-colors focus:outline-none ${sortField === 'mf' ? 'text-accent font-bold' : ''}`}
+                                  className={`hover:text-accent transition-colors focus:outline-none ${sortField === 'mf' ? 'text-accent font-bold' : ''}`}
                                 >
-                                  <span>M.F</span>
-                                  <span className="text-xs opacity-70">
-                                    {sortField === 'mf' ? (sortDirection === 'asc' ? '▲' : '▼') : '↕'}
-                                  </span>
+                                  M.F
                                 </button>
                               </th>
                               <th className="px-4 py-2.5 text-right font-semibold">Actions</th>
@@ -860,7 +845,7 @@ export default function SettingsPage() {
                               <>
                                 <tr className="bg-warning/10 border-y border-warning/20">
                                   <td colSpan={6} className="px-4 py-2 font-bold text-warning text-xs uppercase tracking-wider">
-                                    ⚡ Incoming Meters ({secIncomingMeters.length})
+                                    Incoming Meters ({secIncomingMeters.length})
                                   </td>
                                 </tr>
                                 {secIncomingMeters.map((m, idx) =>
@@ -876,7 +861,7 @@ export default function SettingsPage() {
                               <>
                                 <tr className="bg-accent/10 border-y border-accent/20">
                                   <td colSpan={6} className="px-4 py-2 font-bold text-accent text-xs uppercase tracking-wider">
-                                    ⚡ Mother &amp; Submeter Hierarchy ({secMotherMeters.length + secSubMeters.length + secSubSubMeters.length})
+                                    Mother &amp; Submeter Hierarchy ({secMotherMeters.length + secSubMeters.length + secSubSubMeters.length})
                                   </td>
                                 </tr>
                                 {secMotherMeters.map((mother, idx) => {
@@ -918,7 +903,7 @@ export default function SettingsPage() {
                               <>
                                 <tr className="bg-success/10 border-y border-success/20">
                                   <td colSpan={6} className="px-4 py-2 font-bold text-success text-xs uppercase tracking-wider">
-                                    📊 Unassigned Submeters ({secUnassignedSubMeters.length})
+                                    Unassigned Submeters ({secUnassignedSubMeters.length})
                                   </td>
                                 </tr>
                                 {secUnassignedSubMeters.map((m, idx) =>
@@ -934,7 +919,7 @@ export default function SettingsPage() {
                               <>
                                 <tr className="bg-danger/10 border-y border-danger/20">
                                   <td colSpan={6} className="px-4 py-2 font-bold text-danger text-xs uppercase tracking-wider">
-                                    📊 Unassigned Sub of Sub ({secUnassignedSubSubMeters.length})
+                                    Unassigned Sub of Sub ({secUnassignedSubSubMeters.length})
                                   </td>
                                 </tr>
                                 {secUnassignedSubSubMeters.map((m, idx) =>
@@ -1009,6 +994,65 @@ export default function SettingsPage() {
               </div>
             </Card>
           )}
+
+          {/* Add Section Empty Table Placeholder */}
+          <Card className="p-0 overflow-hidden border border-border/80 shadow-sm mt-4">
+            <div className="max-h-[60vh] overflow-auto">
+              <table className="w-full text-sm">
+                <thead className="sticky top-0 z-10 bg-bg-surface shadow-sm">
+                  <tr className="border-b border-border text-xs text-text-secondary">
+                    <th className="px-4 py-2.5 text-left font-semibold">Meter Name</th>
+                    <th className="px-4 py-2.5 text-left font-semibold">Category</th>
+                    <th className="px-4 py-2.5 text-left font-semibold">Location</th>
+                    <th className="px-4 py-2.5 text-left font-semibold">Parent (Mother)</th>
+                    <th className="px-4 py-2.5 text-center font-semibold">M.F</th>
+                    <th className="px-4 py-2.5 text-right font-semibold">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td colSpan={6} className="px-4 py-12 text-center text-text-muted">
+                      {!showSectionForm ? (
+                        <div className="flex flex-col items-center justify-center">
+                          <p className="text-sm font-medium mb-3">Organize meters by adding a new section</p>
+                          <Button variant="outline" size="sm" onClick={() => setShowSectionForm(true)}>
+                            + Add Section
+                          </Button>
+                        </div>
+                      ) : (
+                        <form onSubmit={handleAddSection} className="inline-flex flex-wrap items-center justify-center gap-3 bg-bg-elevated p-4 rounded-lg border border-border/50 shadow-sm">
+                          <Input
+                            placeholder="Section Name (e.g. Steam Meter)"
+                            value={newSectionName}
+                            onChange={(e) => setNewSectionName(e.target.value)}
+                            className="w-56"
+                          />
+                          <Input
+                            placeholder="Icon (e.g. 💨)"
+                            value={newSectionIcon}
+                            onChange={(e) => setNewSectionIcon(e.target.value)}
+                            className="w-24"
+                          />
+                          <Input
+                            placeholder="Unit (e.g. kWh)"
+                            value={newSectionUnit}
+                            onChange={(e) => setNewSectionUnit(e.target.value)}
+                            className="w-32"
+                          />
+                          <Button type="submit" variant="primary" size="sm" loading={sectionCreating}>
+                            Save
+                          </Button>
+                          <Button type="button" variant="ghost" size="sm" onClick={() => setShowSectionForm(false)}>
+                            Cancel
+                          </Button>
+                        </form>
+                      )}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </Card>
         </div>
       ) : (
         /* MAJOR UNITS & ALLOCATIONS TAB */
