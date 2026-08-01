@@ -409,11 +409,11 @@ export default function ConsumptionPage() {
             onClick={() => setDateMode('month')}
             className={`px-4 py-2 rounded-[var(--radius-md)] text-sm font-semibold transition-all ${
               dateMode === 'month'
-                ? 'bg-accent text-white shadow-sm'
+                ? 'bg-success text-white shadow-sm'
                 : 'bg-bg-elevated text-text-secondary hover:text-text-primary border border-border'
             }`}
           >
-            📅 Monthly (Month-end → Month-end)
+            📅 Monthly
           </button>
           <button
             type="button"
