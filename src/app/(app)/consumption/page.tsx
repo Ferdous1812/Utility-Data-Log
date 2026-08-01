@@ -67,19 +67,15 @@ export default function ConsumptionPage() {
       };
     }
 
-    // Month mode: current month 30th and previous month 30th
+    // Month mode: last date of selected month and last date of previous month
     const selectedDate = new Date(selectedYear, selectedMonth - 1, 1);
     const prevMonth = subMonths(selectedDate, 1);
 
-    // Use 30th of selected month (or end of month if fewer days)
-    const currMonthEnd = endOfMonth(selectedDate);
-    const currDay30 = new Date(selectedYear, selectedMonth - 1, 30);
-    const currTarget = currDay30 > currMonthEnd ? currMonthEnd : currDay30;
+    // Use the last date of the selected month
+    const currTarget = endOfMonth(selectedDate);
 
-    // Use 30th of previous month (or end of month if fewer days, e.g. Feb)
-    const prevMonthEnd = endOfMonth(prevMonth);
-    const prevDay30 = new Date(prevMonth.getFullYear(), prevMonth.getMonth(), 30);
-    const prevTarget = prevDay30 > prevMonthEnd ? prevMonthEnd : prevDay30;
+    // Use the last date of the previous month
+    const prevTarget = endOfMonth(prevMonth);
 
     return {
       prevTargetDate: format(prevTarget, 'yyyy-MM-dd'),
@@ -109,38 +105,62 @@ export default function ConsumptionPage() {
     setSections((sectionsRes.data || []) as MeterSection[]);
     setMeters(fetchedMeters);
 
-    // For each meter, find the nearest reading to both target dates
+    // Find the reading closest to a target date — checks the nearest reading
+    // on-or-before AND on-or-after the target, then picks whichever is nearer.
+    const findNearestReading = async (
+      meterId: string,
+      targetDate: string
+    ): Promise<Reading | null> => {
+      const [{ data: beforeData }, { data: afterData }] = await Promise.all([
+        supabase
+          .from('readings')
+          .select('*')
+          .eq('meter_id', meterId)
+          .lte('reading_date', targetDate)
+          .order('reading_date', { ascending: false })
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle(),
+        supabase
+          .from('readings')
+          .select('*')
+          .eq('meter_id', meterId)
+          .gt('reading_date', targetDate)
+          .order('reading_date', { ascending: true })
+          .order('created_at', { ascending: true })
+          .limit(1)
+          .maybeSingle(),
+      ]);
+
+      const before = beforeData as Reading | null;
+      const after = afterData as Reading | null;
+
+      if (before && !after) return before;
+      if (after && !before) return after;
+      if (!before && !after) return null;
+
+      const target = new Date(targetDate).getTime();
+      const beforeDiff = Math.abs(target - new Date(before!.reading_date).getTime());
+      const afterDiff = Math.abs(new Date(after!.reading_date).getTime() - target);
+
+      return afterDiff < beforeDiff ? after : before;
+    };
+
+    // For each meter, find the reading nearest to both target dates
     const pairs = new Map<
       string,
       { prevReading: Reading | null; currReading: Reading | null }
     >();
 
     for (const meter of fetchedMeters) {
-      // Find nearest reading on or before the previous target date
-      const { data: prevData } = await supabase
-        .from('readings')
-        .select('*')
-        .eq('meter_id', meter.id)
-        .lte('reading_date', prevTargetDate)
-        .order('reading_date', { ascending: false })
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      // Find nearest reading on or before the current target date
-      const { data: currData } = await supabase
-        .from('readings')
-        .select('*')
-        .eq('meter_id', meter.id)
-        .lte('reading_date', currTargetDate)
-        .order('reading_date', { ascending: false })
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
+      const [prevData, currData] = await Promise.all([
+        findNearestReading(meter.id, prevTargetDate),
+        findNearestReading(meter.id, currTargetDate),
+      ]);
 
       pairs.set(meter.id, {
-        prevReading: (prevData as Reading | null),
-        currReading: (currData as Reading | null),
+        prevReading: prevData,
+        currReading: currData,
       });
     }
 
@@ -376,7 +396,7 @@ export default function ConsumptionPage() {
           Consumption Data
         </h1>
         <p className="text-sm text-text-secondary mt-1">
-          Monthly consumption = Current Reading (≈30th) − Previous Reading (≈30th of last month) × M.F
+          Monthly consumption = Current Reading (≈last date of month) − Previous Reading (≈last date of previous month) × M.F
         </p>
       </div>
 
@@ -393,7 +413,7 @@ export default function ConsumptionPage() {
                 : 'bg-bg-elevated text-text-secondary hover:text-text-primary border border-border'
             }`}
           >
-            📅 Monthly (30th → 30th)
+            📅 Monthly (Month-end → Month-end)
           </button>
           <button
             type="button"
@@ -426,7 +446,7 @@ export default function ConsumptionPage() {
                 ))}
               </select>
               <p className="text-[11px] text-text-muted mt-0.5">
-                Consumption = reading on 30th {monthNames[selectedMonth - 1]} − reading on 30th {monthNames[selectedMonth - 2 >= 0 ? selectedMonth - 2 : 11]}
+                Consumption = reading nearest last date of {monthNames[selectedMonth - 1]} − reading nearest last date of {monthNames[selectedMonth - 2 >= 0 ? selectedMonth - 2 : 11]}
               </p>
             </div>
             <div className="flex flex-col gap-1.5">
