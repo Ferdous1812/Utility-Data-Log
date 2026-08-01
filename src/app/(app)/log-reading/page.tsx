@@ -215,11 +215,11 @@ export default function LogReadingPage() {
     worksheet.columns = [
       { header: 'Meter Name', key: 'meterName', width: 20 },
       { header: 'Location', key: 'location', width: 20 },
-      { header: 'Previous Reading Date', key: 'prevDate', width: 20 },
-      { header: 'Previous Reading', key: 'prevReading', width: 15 },
-      { header: 'Current Reading Date', key: 'currDate', width: 20 },
-      { header: 'Current Reading', key: 'currReading', width: 15 },
-      { header: 'Difference', key: 'difference', width: 15 },
+      { header: 'Previous Reading Date', key: 'prevDate', width: 20, style: { alignment: { horizontal: 'center' } } },
+      { header: 'Previous Reading', key: 'prevReading', width: 15, style: { alignment: { horizontal: 'center' } } },
+      { header: 'Current Reading Date', key: 'currDate', width: 20, style: { alignment: { horizontal: 'center' } } },
+      { header: 'Current Reading', key: 'currReading', width: 15, style: { alignment: { horizontal: 'center' } } },
+      { header: 'Difference', key: 'difference', width: 15, style: { alignment: { horizontal: 'center' } } },
     ];
 
     // Style the header row
@@ -236,11 +236,13 @@ export default function LogReadingPage() {
         worksheet.mergeCells(`A${sectionRow.number}:G${sectionRow.number}`);
         sectionRow.font = { ...cambriaFont, bold: true, size: 12 };
         sectionRow.alignment = { horizontal: 'center', vertical: 'middle' };
-        sectionRow.fill = {
-          type: 'pattern',
-          pattern: 'solid',
-          fgColor: { argb: 'FFE0E0E0' }
-        };
+        for (let i = 1; i <= 7; i++) {
+          sectionRow.getCell(i).fill = {
+            type: 'pattern',
+            pattern: 'solid',
+            fgColor: { argb: 'FFE0E0E0' }
+          };
+        }
       }
 
       // Add Data Rows
