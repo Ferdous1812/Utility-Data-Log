@@ -9,6 +9,7 @@ import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { useToast } from '@/components/ui/Toast';
 import { format, subDays } from 'date-fns';
+import ExcelJS from 'exceljs';
 import type { Meter, Reading, MeterSection } from '@/lib/types';
 
 interface MeterRow {
@@ -196,41 +197,67 @@ export default function LogReadingPage() {
     (r) => r.currentValue.trim() !== '' && !submittedIds.has(r.meter.id)
   ).length;
 
-  // --- Export to Excel (CSV) ---
-  const handleExportToExcel = useCallback(() => {
-    const csvRows: string[][] = [];
+  // --- Export to Excel (XLSX) ---
+  const handleExportToExcel = useCallback(async () => {
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet('Log Readings');
 
-    // Header row
-    csvRows.push([
-      'Section',
-      'Meter Group',
-      'Meter Name',
-      'Location',
-      'Type',
-      'Previous Reading Date',
-      'Previous Reading',
-      'Current Reading Date',
-      'Current Reading',
-      'Difference',
-    ]);
+    // Page setup: margins (in inches)
+    worksheet.pageSetup.margins = {
+      left: 0.5, right: 0.5,
+      top: 0.5, bottom: 0.5,
+      header: 0.3, footer: 0.3
+    };
 
-    const addGroupRows = (sectionName: string, groupLabel: string, groupRows: MeterRow[]) => {
+    const cambriaFont = { name: 'Cambria', size: 11 };
+
+    // Define columns (Removed 'Section')
+    worksheet.columns = [
+      { header: 'Meter Name', key: 'meterName', width: 20 },
+      { header: 'Location', key: 'location', width: 20 },
+      { header: 'Previous Reading Date', key: 'prevDate', width: 20 },
+      { header: 'Previous Reading', key: 'prevReading', width: 15 },
+      { header: 'Current Reading Date', key: 'currDate', width: 20 },
+      { header: 'Current Reading', key: 'currReading', width: 15 },
+      { header: 'Difference', key: 'difference', width: 15 },
+    ];
+
+    // Style the header row
+    const headerRow = worksheet.getRow(1);
+    headerRow.font = { ...cambriaFont, bold: true };
+    headerRow.alignment = { horizontal: 'center' };
+
+    const addGroupRows = (sectionName: string, groupRows: MeterRow[]) => {
+      if (groupRows.length === 0) return;
+
+      // Add Section Header Row (Merge across all 7 columns)
+      if (sectionName) {
+        const sectionRow = worksheet.addRow([sectionName]);
+        worksheet.mergeCells(`A${sectionRow.number}:G${sectionRow.number}`);
+        sectionRow.font = { ...cambriaFont, bold: true, size: 12 };
+        sectionRow.alignment = { horizontal: 'center', vertical: 'middle' };
+        sectionRow.fill = {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: 'FFE0E0E0' }
+        };
+      }
+
+      // Add Data Rows
       for (const row of groupRows) {
         const diff = getConsumption(row);
-        csvRows.push([
-          sectionName,
-          groupLabel,
-          row.meter.name,
-          row.meter.location || '',
-          getTypeLabel(row.meter.type),
-          row.previousReadingDate
+        const dataRow = worksheet.addRow({
+          meterName: row.meter.name,
+          location: row.meter.location || '',
+          prevDate: row.previousReadingDate
             ? format(new Date(row.previousReadingDate), 'dd MMM yyyy')
             : 'N/A',
-          String(row.previousReadingValue),
-          format(new Date(currentReadingDate), 'dd MMM yyyy'),
-          row.currentValue || '',
-          diff !== null ? String(diff) : '',
-        ]);
+          prevReading: row.previousReadingValue,
+          currDate: format(new Date(currentReadingDate), 'dd MMM yyyy'),
+          currReading: row.currentValue ? Number(row.currentValue) : '',
+          difference: diff !== null ? diff : '',
+        });
+        dataRow.font = cambriaFont;
       }
     };
 
@@ -244,53 +271,52 @@ export default function LogReadingPage() {
         const secOutgoingSub = secRows.filter((r) => r.meter.type === 'outgoing_sub' || r.meter.type === 'submeter');
         const secOutgoingSubSub = secRows.filter((r) => r.meter.type === 'outgoing_sub_sub');
 
-        addGroupRows(sec.name, 'Incoming Meters', secIncoming);
-        addGroupRows(sec.name, 'Outgoing Meters (Main)', secOutgoingMain);
-        addGroupRows(sec.name, 'Outgoing Meters (Sub)', secOutgoingSub);
-        addGroupRows(sec.name, 'Sub of Sub Outgoing', secOutgoingSubSub);
+        addGroupRows(sec.name, secIncoming);
+        addGroupRows(sec.name, secOutgoingMain);
+        addGroupRows(sec.name, secOutgoingSub);
+        addGroupRows(sec.name, secOutgoingSubSub);
       }
 
       // Uncategorized
       const uncategorized = rows.filter((r) => !r.meter.section_id);
       if (uncategorized.length > 0) {
-        addGroupRows('Uncategorized', 'Incoming Meters', uncategorized.filter((r) => r.meter.type === 'incoming' || r.meter.type === 'main'));
-        addGroupRows('Uncategorized', 'Outgoing Meters (Main)', uncategorized.filter((r) => r.meter.type === 'outgoing_main' || r.meter.type === 'outgoing'));
-        addGroupRows('Uncategorized', 'Outgoing Meters (Sub)', uncategorized.filter((r) => r.meter.type === 'outgoing_sub' || r.meter.type === 'submeter'));
-        addGroupRows('Uncategorized', 'Sub of Sub Outgoing', uncategorized.filter((r) => r.meter.type === 'outgoing_sub_sub'));
+        addGroupRows('Uncategorized', uncategorized.filter((r) => r.meter.type === 'incoming' || r.meter.type === 'main'));
+        addGroupRows('Uncategorized', uncategorized.filter((r) => r.meter.type === 'outgoing_main' || r.meter.type === 'outgoing'));
+        addGroupRows('Uncategorized', uncategorized.filter((r) => r.meter.type === 'outgoing_sub' || r.meter.type === 'submeter'));
+        addGroupRows('Uncategorized', uncategorized.filter((r) => r.meter.type === 'outgoing_sub_sub'));
       }
     } else {
-      addGroupRows('', 'Incoming Meters', incomingRows);
-      addGroupRows('', 'Outgoing Meters (Main)', outgoingMainRows);
-      addGroupRows('', 'Outgoing Meters (Sub)', outgoingSubRows);
-      addGroupRows('', 'Sub of Sub Outgoing', outgoingSubSubRows);
+      addGroupRows('', incomingRows);
+      addGroupRows('', outgoingMainRows);
+      addGroupRows('', outgoingSubRows);
+      addGroupRows('', outgoingSubSubRows);
     }
 
-    // Build CSV string (escape fields that contain commas or quotes)
-    const csvContent = csvRows
-      .map((row) =>
-        row.map((field) => {
-          const str = String(field);
-          if (str.includes(',') || str.includes('"') || str.includes('\n')) {
-            return '"' + str.replace(/"/g, '""') + '"';
-          }
-          return str;
-        }).join(',')
-      )
-      .join('\n');
+    // Auto-fit columns
+    worksheet.columns.forEach((column) => {
+      let maxLength = 0;
+      column.eachCell!({ includeEmpty: true }, (cell) => {
+        const columnLength = cell.value ? cell.value.toString().length : 10;
+        if (columnLength > maxLength) {
+          maxLength = columnLength;
+        }
+      });
+      column.width = maxLength < 10 ? 10 : maxLength + 2;
+    });
 
-    // Add BOM for proper Excel encoding of special characters
-    const BOM = '\uFEFF';
-    const blob = new Blob([BOM + csvContent], { type: 'text/csv;charset=utf-8;' });
+    // Generate Excel file
+    const buffer = await workbook.xlsx.writeBuffer();
+    const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `Log_Reading_${format(new Date(currentReadingDate), 'yyyy-MM-dd')}.csv`;
+    link.download = `Log_Reading_${format(new Date(currentReadingDate), 'yyyy-MM-dd')}.xlsx`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
 
-    addToast('success', 'Log reading exported to Excel (CSV) successfully!');
+    addToast('success', 'Log reading exported to Excel successfully!');
   }, [rows, sections, currentReadingDate, incomingRows, outgoingMainRows, outgoingSubRows, outgoingSubSubRows, addToast]);
 
   return (
