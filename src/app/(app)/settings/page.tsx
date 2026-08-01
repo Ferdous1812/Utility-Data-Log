@@ -789,7 +789,7 @@ export default function SettingsPage() {
                     ) : (
                       <div className="max-h-[60vh] overflow-auto">
                         <table className="w-full text-sm">
-                          <thead className="sticky top-0 z-10 bg-bg-surface shadow-sm">
+                          <thead className="sticky top-0 z-10 bg-bg-elevated/60 backdrop-blur-sm">
                             <tr className="border-b border-border text-xs text-text-secondary">
                               <th className="px-4 py-2.5 text-left font-semibold">
                                 <button
@@ -951,7 +951,7 @@ export default function SettingsPage() {
                   </div>
                   <div className="max-h-[60vh] overflow-auto">
                     <table className="w-full text-sm">
-                      <thead className="sticky top-0 z-10 bg-bg-surface shadow-sm">
+                      <thead className="sticky top-0 z-10 bg-bg-elevated/60 backdrop-blur-sm">
                         <tr className="border-b border-border text-xs text-text-secondary">
                           <th className="px-4 py-2.5 text-left font-semibold">Meter Name</th>
                           <th className="px-4 py-2.5 text-left font-semibold">Category</th>
@@ -976,7 +976,7 @@ export default function SettingsPage() {
             <Card className="p-0 overflow-hidden">
               <div className="max-h-[60vh] overflow-auto">
                 <table className="w-full text-sm">
-                  <thead className="sticky top-0 z-10 bg-bg-surface shadow-sm">
+                  <thead className="sticky top-0 z-10 bg-bg-elevated/60 backdrop-blur-sm">
                     <tr className="border-b border-border">
                       <th className="px-4 py-3 text-left font-semibold text-text-secondary">Meter Name</th>
                       <th className="px-4 py-3 text-left font-semibold text-text-secondary">Category</th>
@@ -999,7 +999,7 @@ export default function SettingsPage() {
           <Card className="p-0 overflow-hidden border border-border/80 shadow-sm mt-4">
             <div className="max-h-[60vh] overflow-auto">
               <table className="w-full text-sm">
-                <thead className="sticky top-0 z-10 bg-bg-surface shadow-sm">
+                <thead className="sticky top-0 z-10 bg-bg-elevated/60 backdrop-blur-sm">
                   <tr className="border-b border-border text-xs text-text-secondary">
                     <th className="px-4 py-2.5 text-left font-semibold">Meter Name</th>
                     <th className="px-4 py-2.5 text-left font-semibold">Category</th>
@@ -1167,7 +1167,7 @@ export default function SettingsPage() {
               ) : (
                 <div className="max-h-[60vh] overflow-auto">
                   <table className="w-full text-sm">
-                    <thead className="sticky top-0 z-10 bg-bg-surface shadow-sm">
+                    <thead className="sticky top-0 z-10 bg-bg-elevated/60 backdrop-blur-sm">
                       <tr className="border-b border-border text-text-secondary font-semibold">
                         <th className="px-4 py-3 text-left">Outgoing Meter Name</th>
                         <th className="px-4 py-3 text-left">Location</th>
