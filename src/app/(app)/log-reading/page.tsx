@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { logReading } from '@/lib/actions';
 import { Input } from '@/components/ui/Input';
@@ -55,7 +55,12 @@ export default function LogReadingPage() {
           .select('*')
           .order('sort_order', { ascending: true }),
       ]);
-      setMeters((metersRes.data || []) as Meter[]);
+      // Filter out meters whose location is 'N/A' (case-insensitive)
+      const allMeters = (metersRes.data || []) as Meter[];
+      const filteredMeters = allMeters.filter(
+        (m) => !m.location || m.location.trim().toLowerCase() !== 'n/a'
+      );
+      setMeters(filteredMeters);
       setSections((sectionsRes.data || []) as MeterSection[]);
       setLoadingMeters(false);
     }
@@ -191,14 +196,130 @@ export default function LogReadingPage() {
     (r) => r.currentValue.trim() !== '' && !submittedIds.has(r.meter.id)
   ).length;
 
+  // --- Export to Excel (CSV) ---
+  const handleExportToExcel = useCallback(() => {
+    const csvRows: string[][] = [];
+
+    // Header row
+    csvRows.push([
+      'Section',
+      'Meter Group',
+      'Meter Name',
+      'Location',
+      'Type',
+      'Previous Reading Date',
+      'Previous Reading',
+      'Current Reading Date',
+      'Current Reading',
+      'Difference',
+    ]);
+
+    const addGroupRows = (sectionName: string, groupLabel: string, groupRows: MeterRow[]) => {
+      for (const row of groupRows) {
+        const diff = getConsumption(row);
+        csvRows.push([
+          sectionName,
+          groupLabel,
+          row.meter.name,
+          row.meter.location || '',
+          getTypeLabel(row.meter.type),
+          row.previousReadingDate
+            ? format(new Date(row.previousReadingDate), 'dd MMM yyyy')
+            : 'N/A',
+          String(row.previousReadingValue),
+          format(new Date(currentReadingDate), 'dd MMM yyyy'),
+          row.currentValue || '',
+          diff !== null ? String(diff) : '',
+        ]);
+      }
+    };
+
+    if (sections.length > 0) {
+      for (const sec of sections) {
+        const secRows = rows.filter((r) => r.meter.section_id === sec.id);
+        if (secRows.length === 0) continue;
+
+        const secIncoming = secRows.filter((r) => r.meter.type === 'incoming' || r.meter.type === 'main');
+        const secOutgoingMain = secRows.filter((r) => r.meter.type === 'outgoing_main' || r.meter.type === 'outgoing');
+        const secOutgoingSub = secRows.filter((r) => r.meter.type === 'outgoing_sub' || r.meter.type === 'submeter');
+        const secOutgoingSubSub = secRows.filter((r) => r.meter.type === 'outgoing_sub_sub');
+
+        addGroupRows(sec.name, 'Incoming Meters', secIncoming);
+        addGroupRows(sec.name, 'Outgoing Meters (Main)', secOutgoingMain);
+        addGroupRows(sec.name, 'Outgoing Meters (Sub)', secOutgoingSub);
+        addGroupRows(sec.name, 'Sub of Sub Outgoing', secOutgoingSubSub);
+      }
+
+      // Uncategorized
+      const uncategorized = rows.filter((r) => !r.meter.section_id);
+      if (uncategorized.length > 0) {
+        addGroupRows('Uncategorized', 'Incoming Meters', uncategorized.filter((r) => r.meter.type === 'incoming' || r.meter.type === 'main'));
+        addGroupRows('Uncategorized', 'Outgoing Meters (Main)', uncategorized.filter((r) => r.meter.type === 'outgoing_main' || r.meter.type === 'outgoing'));
+        addGroupRows('Uncategorized', 'Outgoing Meters (Sub)', uncategorized.filter((r) => r.meter.type === 'outgoing_sub' || r.meter.type === 'submeter'));
+        addGroupRows('Uncategorized', 'Sub of Sub Outgoing', uncategorized.filter((r) => r.meter.type === 'outgoing_sub_sub'));
+      }
+    } else {
+      addGroupRows('', 'Incoming Meters', incomingRows);
+      addGroupRows('', 'Outgoing Meters (Main)', outgoingMainRows);
+      addGroupRows('', 'Outgoing Meters (Sub)', outgoingSubRows);
+      addGroupRows('', 'Sub of Sub Outgoing', outgoingSubSubRows);
+    }
+
+    // Build CSV string (escape fields that contain commas or quotes)
+    const csvContent = csvRows
+      .map((row) =>
+        row.map((field) => {
+          const str = String(field);
+          if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+            return '"' + str.replace(/"/g, '""') + '"';
+          }
+          return str;
+        }).join(',')
+      )
+      .join('\n');
+
+    // Add BOM for proper Excel encoding of special characters
+    const BOM = '\uFEFF';
+    const blob = new Blob([BOM + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `Log_Reading_${format(new Date(currentReadingDate), 'yyyy-MM-dd')}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    addToast('success', 'Log reading exported to Excel (CSV) successfully!');
+  }, [rows, sections, currentReadingDate, incomingRows, outgoingMainRows, outgoingSubRows, outgoingSubSubRows, addToast]);
+
   return (
     <div className="max-w-7xl mx-auto space-y-6">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-text-primary">Log Readings</h1>
-        <p className="text-sm text-text-secondary mt-1">
-          Select target Previous Reading Date &amp; Current Reading Date, then enter Current KWh.
-        </p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-text-primary">Log Readings</h1>
+          <p className="text-sm text-text-secondary mt-1">
+            Select target Previous Reading Date &amp; Current Reading Date, then enter Current KWh.
+          </p>
+        </div>
+        <Button
+          variant="outline"
+          size="md"
+          onClick={handleExportToExcel}
+          disabled={rows.length === 0}
+          icon={
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+              <polyline points="14 2 14 8 20 8" />
+              <line x1="16" y1="13" x2="8" y2="13" />
+              <line x1="16" y1="17" x2="8" y2="17" />
+              <polyline points="10 9 9 9 8 9" />
+            </svg>
+          }
+        >
+          Export to Excel
+        </Button>
       </div>
 
       {/* Selectable Dual Date Inputs Card */}
