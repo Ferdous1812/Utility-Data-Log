@@ -806,7 +806,7 @@ export default function SettingsPage() {
                                 <button
                                   type="button"
                                   onClick={() => handleSort('name')}
-                                  className={`hover:text-accent transition-colors focus:outline-none ${sortField === 'name' ? 'text-accent font-bold' : ''}`}
+                                  className={`bg-transparent border-0 outline-none appearance-none p-0 m-0 hover:text-accent transition-colors focus:outline-none ${sortField === 'name' ? 'text-accent font-bold' : ''}`}
                                 >
                                   Meter Name
                                 </button>
@@ -815,7 +815,7 @@ export default function SettingsPage() {
                                 <button
                                   type="button"
                                   onClick={() => handleSort('category')}
-                                  className={`hover:text-accent transition-colors focus:outline-none ${sortField === 'category' ? 'text-accent font-bold' : ''}`}
+                                  className={`bg-transparent border-0 outline-none appearance-none p-0 m-0 hover:text-accent transition-colors focus:outline-none ${sortField === 'category' ? 'text-accent font-bold' : ''}`}
                                 >
                                   Category
                                 </button>
@@ -824,7 +824,7 @@ export default function SettingsPage() {
                                 <button
                                   type="button"
                                   onClick={() => handleSort('location')}
-                                  className={`hover:text-accent transition-colors focus:outline-none ${sortField === 'location' ? 'text-accent font-bold' : ''}`}
+                                  className={`bg-transparent border-0 outline-none appearance-none p-0 m-0 hover:text-accent transition-colors focus:outline-none ${sortField === 'location' ? 'text-accent font-bold' : ''}`}
                                 >
                                   Location
                                 </button>
@@ -833,7 +833,7 @@ export default function SettingsPage() {
                                 <button
                                   type="button"
                                   onClick={() => handleSort('parent')}
-                                  className={`hover:text-accent transition-colors focus:outline-none ${sortField === 'parent' ? 'text-accent font-bold' : ''}`}
+                                  className={`bg-transparent border-0 outline-none appearance-none p-0 m-0 hover:text-accent transition-colors focus:outline-none ${sortField === 'parent' ? 'text-accent font-bold' : ''}`}
                                 >
                                   Parent (Mother)
                                 </button>
@@ -842,7 +842,7 @@ export default function SettingsPage() {
                                 <button
                                   type="button"
                                   onClick={() => handleSort('mf')}
-                                  className={`hover:text-accent transition-colors focus:outline-none ${sortField === 'mf' ? 'text-accent font-bold' : ''}`}
+                                  className={`bg-transparent border-0 outline-none appearance-none p-0 m-0 hover:text-accent transition-colors focus:outline-none ${sortField === 'mf' ? 'text-accent font-bold' : ''}`}
                                 >
                                   M.F
                                 </button>
