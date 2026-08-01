@@ -33,20 +33,20 @@ export function Badge({ children, variant = 'default', className = '' }: BadgePr
 export function RoleBadge({ role }: { role: 'admin' | 'operator' }) {
   return (
     <Badge variant={role === 'admin' ? 'accent' : 'default'}>
-      {role === 'admin' ? '⚡ Admin' : '👤 Operator'}
+      {role === 'admin' ? 'Admin' : 'Operator'}
     </Badge>
   );
 }
 
 export function MeterTypeBadge({ type }: { type: 'incoming' | 'outgoing_main' | 'outgoing_sub' | 'outgoing_sub_sub' | 'main' | 'submeter' | 'outgoing' }) {
   if (type === 'incoming' || type === 'main') {
-    return <Badge variant="warning">⚡ Incoming</Badge>;
+    return <Badge variant="warning">Incoming</Badge>;
   }
   if (type === 'outgoing_main' || type === 'outgoing') {
-    return <Badge variant="accent">⚡ Outgoing (Main)</Badge>;
+    return <Badge variant="accent">Outgoing (Main)</Badge>;
   }
   if (type === 'outgoing_sub_sub') {
-    return <Badge variant="danger">📊 Sub of Sub</Badge>;
+    return <Badge variant="danger">Sub of Sub</Badge>;
   }
-  return <Badge variant="success">📊 Outgoing (Sub)</Badge>;
+  return <Badge variant="success">Outgoing (Sub)</Badge>;
 }
