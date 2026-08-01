@@ -393,12 +393,28 @@ export default function SettingsPage() {
                 </button>
               </div>
             )}
-            <Button variant="ghost" size="sm" onClick={() => setEditingMeter(meter)}>
-              Edit
-            </Button>
-            <Button variant="ghost" size="sm" onClick={() => handleDeleteMeter(meter)} className="text-danger hover:text-danger">
-              Delete
-            </Button>
+            <button
+              type="button"
+              onClick={() => setEditingMeter(meter)}
+              className="text-text-muted hover:text-accent p-1.5 rounded transition-colors"
+              title="Edit Meter"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 20h9" />
+                <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
+              </svg>
+            </button>
+            <button
+              type="button"
+              onClick={() => handleDeleteMeter(meter)}
+              className="text-text-muted hover:text-danger p-1.5 rounded transition-colors"
+              title="Delete Meter"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="3 6 5 6 21 6" />
+                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+              </svg>
+            </button>
           </div>
         </td>
       </tr>
