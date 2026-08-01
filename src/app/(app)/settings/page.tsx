@@ -642,20 +642,7 @@ export default function SettingsPage() {
             Configure incoming power feeders, mother panels, submeter hierarchy, and define Major Unit consumption allocations
           </p>
         </div>
-        {activeTab === 'meters' && (
-          <Button
-            variant="primary"
-            onClick={() => setMeterFormOpen(true)}
-            icon={
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                <line x1="12" y1="5" x2="12" y2="19" />
-                <line x1="5" y1="12" x2="19" y2="12" />
-              </svg>
-            }
-          >
-            Add Meter
-          </Button>
-        )}
+ 
       </div>
 
       {/* Tabs */}
@@ -689,70 +676,7 @@ export default function SettingsPage() {
       ) : activeTab === 'meters' ? (
         /* METERS MANAGEMENT TAB */
         <div className="space-y-4">
-          {/* Section Management Header Strip */}
-          <Card className="p-4">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-xs font-semibold uppercase text-text-secondary tracking-wider">Meter Sections:</span>
-                {sections.map((sec) => (
-                  <span
-                    key={sec.id}
-                    className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-bg-elevated border border-border text-text-primary"
-                  >
-                    <span>{sec.icon}</span>
-                    <span>{sec.name}</span>
-                    <span className="text-accent text-[11px] font-semibold">({sec.unit || 'kWh'})</span>
-                    <span className="text-text-muted text-[10px]">
-                      ({meters.filter((m) => m.section_id === sec.id).length})
-                    </span>
-                    {sections.length > 1 && (
-                      <button
-                        type="button"
-                        onClick={() => handleDeleteSection(sec)}
-                        className="ml-1 text-text-muted hover:text-danger focus:outline-none"
-                        title="Delete Section"
-                      >
-                        ×
-                      </button>
-                    )}
-                  </span>
-                ))}
-              </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setShowSectionForm(!showSectionForm)}
-              >
-                {showSectionForm ? 'Cancel' : '+ Add Section'}
-              </Button>
-            </div>
-
-            {showSectionForm && (
-              <form onSubmit={handleAddSection} className="mt-3 pt-3 border-t border-border flex flex-wrap items-center gap-3">
-                <Input
-                  placeholder="Section Name (e.g. Steam Meter)"
-                  value={newSectionName}
-                  onChange={(e) => setNewSectionName(e.target.value)}
-                  className="w-56"
-                />
-                <Input
-                  placeholder="Icon (e.g. 💨)"
-                  value={newSectionIcon}
-                  onChange={(e) => setNewSectionIcon(e.target.value)}
-                  className="w-24"
-                />
-                <Input
-                  placeholder="Unit (e.g. m³, hrs, kWh)"
-                  value={newSectionUnit}
-                  onChange={(e) => setNewSectionUnit(e.target.value)}
-                  className="w-32"
-                />
-                <Button type="submit" variant="primary" size="sm" loading={sectionCreating}>
-                  Save Section
-                </Button>
-              </form>
-            )}
-          </Card>
+ 
 
           {/* Separate Table Cards per Section */}
           {meters.length === 0 ? (
@@ -847,10 +771,10 @@ export default function SettingsPage() {
                         </p>
                       </div>
                     ) : (
-                      <div className="overflow-x-auto">
+                      <div className="max-h-[60vh] overflow-auto">
                         <table className="w-full text-sm">
-                          <thead>
-                            <tr className="bg-bg-elevated/40 border-b border-border text-xs text-text-secondary">
+                          <thead className="sticky top-0 z-10 bg-bg-surface shadow-sm">
+                            <tr className="border-b border-border text-xs text-text-secondary">
                               <th className="px-4 py-2.5 text-left font-semibold">
                                 <button
                                   type="button"
@@ -1024,10 +948,10 @@ export default function SettingsPage() {
                       </span>
                     </div>
                   </div>
-                  <div className="overflow-x-auto">
+                  <div className="max-h-[60vh] overflow-auto">
                     <table className="w-full text-sm">
-                      <thead>
-                        <tr className="bg-bg-elevated/40 border-b border-border text-xs text-text-secondary">
+                      <thead className="sticky top-0 z-10 bg-bg-surface shadow-sm">
+                        <tr className="border-b border-border text-xs text-text-secondary">
                           <th className="px-4 py-2.5 text-left font-semibold">Meter Name</th>
                           <th className="px-4 py-2.5 text-left font-semibold">Category</th>
                           <th className="px-4 py-2.5 text-left font-semibold">Location</th>
@@ -1049,10 +973,10 @@ export default function SettingsPage() {
           ) : (
             /* Fallback single table when no sections are defined */
             <Card className="p-0 overflow-hidden">
-              <div className="overflow-x-auto">
+              <div className="max-h-[60vh] overflow-auto">
                 <table className="w-full text-sm">
-                  <thead>
-                    <tr className="bg-bg-elevated border-b border-border">
+                  <thead className="sticky top-0 z-10 bg-bg-surface shadow-sm">
+                    <tr className="border-b border-border">
                       <th className="px-4 py-3 text-left font-semibold text-text-secondary">Meter Name</th>
                       <th className="px-4 py-3 text-left font-semibold text-text-secondary">Category</th>
                       <th className="px-4 py-3 text-left font-semibold text-text-secondary">Location</th>
@@ -1181,10 +1105,10 @@ export default function SettingsPage() {
                   <p className="text-sm">No active outgoing meters configured.</p>
                 </div>
               ) : (
-                <div className="overflow-x-auto">
+                <div className="max-h-[60vh] overflow-auto">
                   <table className="w-full text-sm">
-                    <thead>
-                      <tr className="bg-bg-elevated border-b border-border text-text-secondary font-semibold">
+                    <thead className="sticky top-0 z-10 bg-bg-surface shadow-sm">
+                      <tr className="border-b border-border text-text-secondary font-semibold">
                         <th className="px-4 py-3 text-left">Outgoing Meter Name</th>
                         <th className="px-4 py-3 text-left">Location</th>
                         <th className="px-4 py-3 text-center">Other Allocations</th>
