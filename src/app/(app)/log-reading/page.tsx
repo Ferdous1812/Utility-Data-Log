@@ -331,23 +331,39 @@ export default function LogReadingPage() {
             Select target Previous Reading Date &amp; Current Reading Date, then enter Current KWh.
           </p>
         </div>
-        <Button
-          variant="outline"
-          size="md"
-          onClick={handleExportToExcel}
-          disabled={rows.length === 0}
-          icon={
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-              <polyline points="14 2 14 8 20 8" />
-              <line x1="16" y1="13" x2="8" y2="13" />
-              <line x1="16" y1="17" x2="8" y2="17" />
-              <polyline points="10 9 9 9 8 9" />
-            </svg>
-          }
-        >
-          Export to Excel
-        </Button>
+        <div className="flex items-center gap-3">
+          <Button
+            variant="outline"
+            size="md"
+            onClick={handleExportToExcel}
+            disabled={rows.length === 0}
+            icon={
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                <polyline points="14 2 14 8 20 8" />
+                <line x1="16" y1="13" x2="8" y2="13" />
+                <line x1="16" y1="17" x2="8" y2="17" />
+                <polyline points="10 9 9 9 8 9" />
+              </svg>
+            }
+          >
+            Export to Excel
+          </Button>
+          <Button
+            variant="success"
+            size="md"
+            loading={submitting}
+            disabled={filledCount === 0}
+            onClick={handleSubmitAll}
+            icon={
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                <polyline points="20 6 9 17 4 12" />
+              </svg>
+            }
+          >
+            Submit All Readings
+          </Button>
+        </div>
       </div>
 
       {/* Selectable Dual Date Inputs Card */}
@@ -476,33 +492,6 @@ export default function LogReadingPage() {
         )}
       </Card>
 
-      {/* Sticky Bottom Bar */}
-      {rows.length > 0 && (
-        <div className="flex items-center justify-between bg-bg-surface border border-border rounded-[var(--radius-lg)] p-4 sticky bottom-4 z-10 backdrop-blur-sm bg-bg-surface/95">
-          <div className="text-sm text-text-secondary">
-            <span className="font-bold text-accent">{filledCount}</span> entry{filledCount !== 1 ? 'ies' : ''} ready to submit for <span className="font-bold text-text-primary">{format(new Date(currentReadingDate), 'dd MMM yyyy')}</span>
-            {submittedIds.size > 0 && (
-              <span className="text-success ml-2">
-                · {submittedIds.size} saved ✓
-              </span>
-            )}
-          </div>
-          <Button
-            variant="success"
-            size="lg"
-            loading={submitting}
-            disabled={filledCount === 0}
-            onClick={handleSubmitAll}
-            icon={
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                <polyline points="20 6 9 17 4 12" />
-              </svg>
-            }
-          >
-            Submit All Readings
-          </Button>
-        </div>
-      )}
     </div>
   );
 
