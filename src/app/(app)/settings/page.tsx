@@ -423,15 +423,26 @@ export default function SettingsPage() {
 
   // ─── Unit Tab Helpers & Logic ───
   const outgoingMetersOnly = useMemo(() => {
-    return meters.filter(
-      (m) =>
+    return meters.filter((m) => {
+      const isOutgoingType =
         m.type === 'outgoing_main' ||
         m.type === 'outgoing' ||
         m.type === 'outgoing_sub' ||
         m.type === 'submeter' ||
-        m.type === 'outgoing_sub_sub'
-    );
-  }, [meters]);
+        m.type === 'outgoing_sub_sub';
+      if (!isOutgoingType) return false;
+
+      // Only include meters belonging to a KW (kWh/Energy) section
+      const section = sections.find((s) => s.id === m.section_id);
+      const isKwMeter = !!section?.unit?.trim().toLowerCase().startsWith('kw');
+      if (!isKwMeter) return false;
+
+      // Exclude meters whose location is 'NA'
+      if (m.location?.trim().toUpperCase() === 'NA') return false;
+
+      return true;
+    });
+  }, [meters, sections]);
 
   const meterTotalAllocations = useMemo(() => {
     const totals: Record<string, number> = {};
@@ -1198,7 +1209,7 @@ export default function SettingsPage() {
                             <td className="px-4 py-3 text-text-secondary">{meter.location}</td>
                             <td className="px-4 py-3 text-center tabular-nums">
                               {otherPct > 0 ? (
-                                <span className="text-text-muted text-xs font-semibold">{otherPct}% (other units)</span>
+                                <span className="text-text-muted text-xs font-semibold">{otherPct}%</span>
                               ) : (
                                 <span className="text-text-muted/40 text-xs">—</span>
                               )}
