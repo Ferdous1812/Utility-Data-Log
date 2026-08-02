@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { createClient } from '@/lib/supabase/client';
-import { logReading } from '@/lib/actions';
+import { logReading, updateReadingAction } from '@/lib/actions';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
@@ -17,6 +17,7 @@ interface MeterRow {
   previousReadingValue: number; // 0 if no previous reading exists
   previousReadingDate: string | null; // N/A if no previous reading exists
   currentValue: string;
+  readingId: string | null; // id of the saved reading row, once saved (enables edit)
 }
 
 export default function LogReadingPage() {
@@ -37,8 +38,26 @@ export default function LogReadingPage() {
   const [rows, setRows] = useState<MeterRow[]>([]);
   const [loadingMeters, setLoadingMeters] = useState(true);
   const [loadingPrevious, setLoadingPrevious] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
+  const [savingIds, setSavingIds] = useState<Set<string>>(new Set());
   const [submittedIds, setSubmittedIds] = useState<Set<string>>(new Set());
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  // Fetch current user's role (edit access is admin-only, same as History page)
+  useEffect(() => {
+    async function fetchRole() {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) return;
+      const { data } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', user.id)
+        .single();
+      setIsAdmin(data?.role === 'admin');
+    }
+    fetchRole();
+  }, [supabase]);
 
   // Fetch active meters & sections
   useEffect(() => {
@@ -97,6 +116,7 @@ export default function LogReadingPage() {
         previousReadingValue: prevReading ? Number(prevReading.reading_value) : 0,
         previousReadingDate: prevReading ? prevReading.reading_date : null,
         currentValue: '',
+        readingId: null,
       });
     }
 
@@ -126,57 +146,69 @@ export default function LogReadingPage() {
     return current - row.previousReadingValue;
   };
 
-  // Submit filled rows
-  const handleSubmitAll = async () => {
-    const filledRows = rows.filter(
-      (r) => r.currentValue.trim() !== '' && !submittedIds.has(r.meter.id)
-    );
+  // Save a single row's reading individually
+  const handleSaveRow = async (meterId: string) => {
+    const row = rows.find((r) => r.meter.id === meterId);
+    if (!row) return;
 
-    if (filledRows.length === 0) {
-      addToast('error', 'Please enter at least one Current KWh value.');
+    if (!row.currentValue.trim()) {
+      addToast('error', `Please enter a Current Reading for "${row.meter.name}".`);
       return;
     }
 
-    for (const row of filledRows) {
-      const val = parseFloat(row.currentValue);
-      if (isNaN(val) || val < 0) {
-        addToast('error', `Invalid reading for "${row.meter.name}". Must be a non-negative number.`);
-        return;
-      }
+    const val = parseFloat(row.currentValue);
+    if (isNaN(val) || val < 0) {
+      addToast('error', `Invalid reading for "${row.meter.name}". Must be a non-negative number.`);
+      return;
     }
 
-    setSubmitting(true);
-    let successCount = 0;
-    let failCount = 0;
-    const newSubmitted = new Set(submittedIds);
+    setSavingIds((prev) => new Set(prev).add(meterId));
 
-    for (const row of filledRows) {
-      const result = await logReading({
-        meter_id: row.meter.id,
-        reading_value: parseFloat(row.currentValue),
-        reading_date: currentReadingDate,
-      });
+    // If this row was already saved before (has a readingId), update it in place
+    // instead of inserting a duplicate reading.
+    const result = row.readingId
+      ? await updateReadingAction(row.readingId, {
+          reading_value: val,
+          reading_date: currentReadingDate,
+        })
+      : await logReading({
+          meter_id: row.meter.id,
+          reading_value: val,
+          reading_date: currentReadingDate,
+        });
 
-      if (result.success) {
-        successCount++;
-        newSubmitted.add(row.meter.id);
-      } else {
-        failCount++;
-        addToast('error', `${row.meter.name}: ${result.message}`);
-      }
-    }
-
-    setSubmittedIds(newSubmitted);
-    setSubmitting(false);
-
-    if (successCount > 0) {
-      addToast(
-        'success',
-        `${successCount} reading${successCount > 1 ? 's' : ''} logged successfully!${
-          failCount > 0 ? ` (${failCount} failed)` : ''
-        }`
+    if (result.success) {
+      setRows((prev) =>
+        prev.map((r) =>
+          r.meter.id === meterId
+            ? {
+                ...r,
+                readingId:
+                  'readingId' in result && result.readingId ? result.readingId : r.readingId,
+              }
+            : r
+        )
       );
+      setSubmittedIds((prev) => new Set(prev).add(meterId));
+      addToast('success', `${row.meter.name}: ${result.message}`);
+    } else {
+      addToast('error', `${row.meter.name}: ${result.message}`);
     }
+
+    setSavingIds((prev) => {
+      const next = new Set(prev);
+      next.delete(meterId);
+      return next;
+    });
+  };
+
+  // Unlock a saved row for editing again
+  const handleEditRow = (meterId: string) => {
+    setSubmittedIds((prev) => {
+      const next = new Set(prev);
+      next.delete(meterId);
+      return next;
+    });
   };
 
   // Meter Groups
@@ -192,10 +224,6 @@ export default function LogReadingPage() {
   const outgoingSubSubRows = rows.filter(
     (r) => r.meter.type === 'outgoing_sub_sub'
   );
-
-  const filledCount = rows.filter(
-    (r) => r.currentValue.trim() !== '' && !submittedIds.has(r.meter.id)
-  ).length;
 
   // --- Export to Excel (XLSX) ---
   const handleExportToExcel = useCallback(async () => {
@@ -328,7 +356,7 @@ export default function LogReadingPage() {
         <div>
           <h1 className="text-2xl font-bold text-text-primary">Log Readings</h1>
           <p className="text-sm text-text-secondary mt-1">
-            Select target Previous Reading Date &amp; Current Reading Date, then enter Current KWh.
+            Select target Previous Reading Date &amp; Current Reading Date, then enter and save each Current Reading individually.
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -348,20 +376,6 @@ export default function LogReadingPage() {
             }
           >
             Export to Excel
-          </Button>
-          <Button
-            variant="success"
-            size="md"
-            loading={submitting}
-            disabled={filledCount === 0}
-            onClick={handleSubmitAll}
-            icon={
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                <polyline points="20 6 9 17 4 12" />
-              </svg>
-            }
-          >
-            Submit All Readings
           </Button>
         </div>
       </div>
@@ -526,6 +540,7 @@ export default function LogReadingPage() {
         {groupRows.map((row, idx) => {
           const difference = getConsumption(row);
           const isSubmitted = submittedIds.has(row.meter.id);
+          const isSaving = savingIds.has(row.meter.id);
           const isNegative = difference !== null && difference < 0;
 
           return (
@@ -567,34 +582,80 @@ export default function LogReadingPage() {
                 {format(new Date(currentReadingDate), 'dd MMM yyyy')}
               </td>
 
-              {/* Current Reading Input */}
+              {/* Current Reading Input + Save / Edit Icons */}
               <td className="px-4 py-2.5 text-center text-sm">
                 {isSubmitted ? (
-                  <div className="text-center font-bold text-success text-sm tabular-nums">
-                    {parseFloat(row.currentValue).toLocaleString()}
+                  <div className="flex items-center justify-center gap-2">
+                    <span className="font-bold text-success text-sm tabular-nums">
+                      {parseFloat(row.currentValue).toLocaleString()}
+                    </span>
+                    {isAdmin && (
+                      <button
+                        type="button"
+                        onClick={() => handleEditRow(row.meter.id)}
+                        title="Edit this reading"
+                        className="flex-shrink-0 w-7 h-7 inline-flex items-center justify-center rounded-[var(--radius-sm)]
+                          text-text-muted hover:text-accent hover:bg-accent/10 transition-colors cursor-pointer"
+                      >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
+                        </svg>
+                      </button>
+                    )}
                   </div>
                 ) : (
-                  <input
-                    type="number"
-                    inputMode="decimal"
-                    step="0.01"
-                    min="0"
-                    placeholder={`Enter ${
-                      (() => {
-                        const sec = sections.find((s) => s.id === row.meter.section_id);
-                        if (sec?.unit) return sec.unit;
-                        if (sec?.name?.toLowerCase().includes('gas')) return 'm³';
-                        if (sec?.name?.toLowerCase().includes('hour')) return 'hrs';
-                        return 'Reading';
-                      })()
-                    }`}
-                    value={row.currentValue}
-                    onChange={(e) => updateCurrentValue(row.meter.id, e.target.value)}
-                    className="w-full h-9 px-3 py-1 rounded-[var(--radius-md)] border border-border bg-bg-primary text-text-primary text-center font-semibold tabular-nums text-sm
-                      focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent
-                      placeholder:text-text-muted/50 placeholder:font-normal
-                      transition-all"
-                  />
+                  <div className="flex items-center justify-center gap-1.5">
+                    <input
+                      type="number"
+                      inputMode="decimal"
+                      step="0.01"
+                      min="0"
+                      placeholder={`Enter ${
+                        (() => {
+                          const sec = sections.find((s) => s.id === row.meter.section_id);
+                          if (sec?.unit) return sec.unit;
+                          if (sec?.name?.toLowerCase().includes('gas')) return 'm³';
+                          if (sec?.name?.toLowerCase().includes('hour')) return 'hrs';
+                          return 'Reading';
+                        })()
+                      }`}
+                      value={row.currentValue}
+                      onChange={(e) => updateCurrentValue(row.meter.id, e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          handleSaveRow(row.meter.id);
+                        }
+                      }}
+                      disabled={isSaving}
+                      className="w-full h-9 px-3 py-1 rounded-[var(--radius-md)] border border-border bg-bg-primary text-text-primary text-center font-semibold tabular-nums text-sm
+                        focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent
+                        placeholder:text-text-muted/50 placeholder:font-normal
+                        disabled:opacity-50
+                        transition-all"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => handleSaveRow(row.meter.id)}
+                      disabled={isSaving || !row.currentValue.trim()}
+                      title="Save this reading"
+                      className="flex-shrink-0 w-8 h-8 inline-flex items-center justify-center rounded-[var(--radius-sm)]
+                        bg-success/10 text-success hover:bg-success/20 border border-success/20
+                        disabled:opacity-40 disabled:cursor-not-allowed
+                        transition-colors cursor-pointer"
+                    >
+                      {isSaving ? (
+                        <svg className="animate-spin" width="14" height="14" viewBox="0 0 24 24" fill="none">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                        </svg>
+                      ) : (
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="20 6 9 17 4 12" />
+                        </svg>
+                      )}
+                    </button>
+                  </div>
                 )}
               </td>
 
