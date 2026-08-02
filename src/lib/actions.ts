@@ -72,7 +72,7 @@ export async function logReading(formData: {
   meter_id: string;
   reading_value: number;
   reading_date: string;
-}): Promise<{ success: boolean; message: string; usage?: number | null }> {
+}): Promise<{ success: boolean; message: string; usage?: number | null; readingId?: string }> {
   const supabase = await createClient();
 
   const {
@@ -113,6 +113,7 @@ export async function logReading(formData: {
       ? `Reading logged successfully! Usage: ${Number(data.usage).toLocaleString()} kWh`
       : 'Reading logged successfully! (First reading for this meter — no usage calculated)',
     usage: data.usage,
+    readingId: data.id,
   };
 }
 
