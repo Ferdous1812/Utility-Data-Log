@@ -238,21 +238,18 @@ export default function LogReadingPage() {
     worksheet.pageSetup.fitToHeight = 0;
     worksheet.pageSetup.horizontalCentered = true;
     worksheet.pageSetup.printTitlesRow = '1:1';
-    // "Narrow" margins, but with extra top margin so the 3-line company
-    // header has room to print without overlapping row 1/2 of the data.
-    // (Header text starts at the "header" margin and grows downward — the
-    // top margin must be taller than header-margin + header text height.)
+    // Margins matched to the user's Page Setup dialog
     worksheet.pageSetup.margins = {
       left: 0.25, right: 0.25,
-      top: 1.2, bottom: 0.75,
-      header: 0.3, footer: 0.3
+      top: 0.85, bottom: 0.5,
+      header: 0.1, footer: 0.1
     };
 
     // Print header: 3-line company header, centered
     worksheet.headerFooter.oddHeader =
       '&C&"Cambria,Bold"&14ACI Formulations PLC\n' +
       '&"Cambria,Regular"&11Rajabari, Sreepur, Gazipur\n' +
-      '&"Cambria,Bold"&12Monthly Meter Reading';
+      '&"Cambria,Bold"&11Monthly Meter Reading';
     worksheet.headerFooter.evenHeader = worksheet.headerFooter.oddHeader;
 
     // Print footer: centered page number
@@ -610,28 +607,30 @@ export default function LogReadingPage() {
               </td>
 
               {/* Current Reading Input + Save / Edit Icons */}
-              <td className="px-4 py-2.5 text-center text-sm">
+              <td className="px-4 py-2.5 text-sm">
                 {isSubmitted ? (
-                  <div className="flex items-center justify-center gap-2">
-                    <span className="font-bold text-success text-sm tabular-nums">
+                  <div className="w-full flex items-center gap-1.5">
+                    <span className="flex-1 min-w-0 text-center font-bold text-success text-sm tabular-nums">
                       {parseFloat(row.currentValue).toLocaleString()}
                     </span>
-                    {isAdmin && (
+                    {isAdmin ? (
                       <button
                         type="button"
                         onClick={() => handleEditRow(row.meter.id)}
                         title="Edit this reading"
-                        className="flex-shrink-0 w-7 h-7 inline-flex items-center justify-center rounded-[var(--radius-sm)]
+                        className="flex-shrink-0 w-8 h-8 inline-flex items-center justify-center rounded-[var(--radius-sm)]
                           text-text-muted hover:text-accent hover:bg-accent/10 transition-colors cursor-pointer"
                       >
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                           <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
                         </svg>
                       </button>
+                    ) : (
+                      <div className="flex-shrink-0 w-8 h-8" />
                     )}
                   </div>
                 ) : (
-                  <div className="flex items-center justify-center gap-1.5">
+                  <div className="w-full flex items-center gap-1.5">
                     <input
                       type="number"
                       inputMode="decimal"
@@ -655,7 +654,7 @@ export default function LogReadingPage() {
                         }
                       }}
                       disabled={isSaving}
-                      className="w-full h-9 px-3 py-1 rounded-[var(--radius-md)] border border-border bg-bg-primary text-text-primary text-center font-semibold tabular-nums text-sm
+                      className="flex-1 min-w-0 h-9 px-3 py-1 rounded-[var(--radius-md)] border border-border bg-bg-primary text-text-primary text-center font-semibold tabular-nums text-sm
                         focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent
                         placeholder:text-text-muted/50 placeholder:font-normal
                         disabled:opacity-50
