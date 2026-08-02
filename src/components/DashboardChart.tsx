@@ -92,21 +92,21 @@ export function DashboardChart({ data }: DashboardChartProps) {
           axisLine={{ stroke: 'var(--color-border)' }}
           tickFormatter={(v) => `${v} kWh`}
         />
-        <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(0,212,255,0.05)' }} />
+        <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(29,78,216,0.06)' }} />
         <Legend
           wrapperStyle={{ fontSize: '13px', color: 'var(--color-text-secondary)' }}
         />
         <Bar
           dataKey="currentMonth"
           name="This Month"
-          fill="#00D4FF"
+          fill="var(--color-accent)"
           radius={[4, 4, 0, 0]}
           maxBarSize={48}
         />
         <Bar
           dataKey="previousMonth"
           name="Last Month"
-          fill="#374B63"
+          fill="var(--color-text-muted)"
           radius={[4, 4, 0, 0]}
           maxBarSize={48}
         />

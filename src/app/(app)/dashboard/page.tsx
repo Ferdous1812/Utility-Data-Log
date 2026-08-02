@@ -363,7 +363,7 @@ export default function DashboardPage() {
           return {
             name: m.name,
             value: Math.round((meterMonthlyConsumption.get(m.id)?.[refIdx] || 0) * 10) / 10,
-            color: isIncoming ? '#FFB300' : '#00D4FF',
+            color: isIncoming ? '#D97706' : '#1D4ED8',
             sublabel: isIncoming ? 'Incoming' : 'Outgoing',
           };
         })
@@ -521,10 +521,10 @@ export default function DashboardPage() {
               <div className="overflow-x-auto">
                 <table className="w-full text-sm table-fixed">
                   <thead>
-                    <tr className="bg-bg-elevated/60 border-b border-border">
-                      <th className="px-4 py-3 text-left font-semibold text-text-secondary w-[38%]">Unit Name</th>
-                      <th className="px-4 py-3 text-right font-semibold text-text-secondary w-[22%]">kWh</th>
-                      <th className="px-4 py-3 text-right font-semibold text-text-secondary w-[220px]">
+                    <tr className="sticky top-0 z-10 bg-bg-elevated">
+                      <th className="px-3 py-2.5 text-left font-bold text-[11px] uppercase tracking-wider text-text-secondary w-[38%] border-b-2 border-border">Unit Name</th>
+                      <th className="px-3 py-2.5 text-right font-bold text-[11px] uppercase tracking-wider text-text-secondary w-[22%] border-b-2 border-border">kWh</th>
+                      <th className="px-3 py-2.5 text-right font-bold text-[11px] uppercase tracking-wider text-text-secondary w-[220px] border-b-2 border-border">
                         Relative %
                       </th>
                     </tr>
@@ -535,7 +535,7 @@ export default function DashboardPage() {
                       return (
                         <tr
                           key={u.id}
-                          className={`border-b border-border/50 transition-colors hover:bg-bg-surface-hover ${
+                          className={`border-b border-border transition-colors hover:bg-bg-surface-hover ${
                             idx % 2 === 0 ? 'bg-bg-surface' : 'bg-bg-primary/50'
                           }`}
                         >
@@ -649,11 +649,11 @@ export default function DashboardPage() {
                   </div>
                   <div className="flex items-center gap-3 text-[11px] text-text-secondary">
                     <span className="flex items-center gap-1">
-                      <span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ backgroundColor: '#FFB300' }} />
+                      <span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ backgroundColor: '#D97706' }} />
                       Incoming
                     </span>
                     <span className="flex items-center gap-1">
-                      <span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ backgroundColor: '#00D4FF' }} />
+                      <span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ backgroundColor: '#1D4ED8' }} />
                       Outgoing
                     </span>
                   </div>
@@ -669,11 +669,11 @@ export default function DashboardPage() {
                   </div>
                   <div className="flex items-center gap-3 text-[11px] text-text-secondary">
                     <span className="flex items-center gap-1">
-                      <span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ backgroundColor: '#FFB300' }} />
+                      <span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ backgroundColor: '#D97706' }} />
                       Incoming
                     </span>
                     <span className="flex items-center gap-1">
-                      <span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ backgroundColor: '#00D4FF' }} />
+                      <span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ backgroundColor: '#1D4ED8' }} />
                       Outgoing
                     </span>
                   </div>

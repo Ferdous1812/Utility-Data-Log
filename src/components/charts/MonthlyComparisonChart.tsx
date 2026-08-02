@@ -83,7 +83,7 @@ export function MonthlyComparisonChart({ data, series, unit = 'kWh' }: MonthlyCo
           axisLine={{ stroke: 'var(--color-border)' }}
           tickFormatter={(v) => `${v.toLocaleString()}`}
         />
-        <Tooltip content={<CustomTooltip unit={unit} />} cursor={{ fill: 'rgba(255,255,255,0.04)' }} />
+        <Tooltip content={<CustomTooltip unit={unit} />} cursor={{ fill: 'rgba(29,78,216,0.06)' }} />
         <Legend wrapperStyle={{ fontSize: '12px', color: 'var(--color-text-secondary)' }} />
         {series.map((s) => (
           <Bar key={s.key} dataKey={s.key} name={s.name} fill={s.color} radius={[4, 4, 0, 0]} maxBarSize={40} />

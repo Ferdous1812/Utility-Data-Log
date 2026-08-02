@@ -84,12 +84,12 @@ export default function UsersPage() {
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead>
+              <thead className="sticky top-0 z-10 bg-bg-elevated">
                 <tr className="bg-bg-elevated border-b border-border">
-                  <th className="px-4 py-3 text-left font-semibold text-text-secondary">User</th>
-                  <th className="px-4 py-3 text-left font-semibold text-text-secondary">Role</th>
-                  <th className="px-4 py-3 text-left font-semibold text-text-secondary">Joined</th>
-                  <th className="px-4 py-3 text-right font-semibold text-text-secondary">Actions</th>
+                  <th className="px-3 py-2.5 text-left font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-border">User</th>
+                  <th className="px-3 py-2.5 text-left font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-border">Role</th>
+                  <th className="px-3 py-2.5 text-left font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-border">Joined</th>
+                  <th className="px-3 py-2.5 text-right font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-border">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -99,7 +99,7 @@ export default function UsersPage() {
                   return (
                     <tr
                       key={profile.id}
-                      className={`border-b border-border/50 transition-colors hover:bg-bg-surface-hover ${
+                      className={`border-b border-border transition-colors hover:bg-bg-surface-hover ${
                         idx % 2 === 0 ? 'bg-bg-surface' : 'bg-bg-primary/50'
                       }`}
                     >

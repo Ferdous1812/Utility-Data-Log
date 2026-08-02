@@ -77,19 +77,19 @@ export function HistoryTable({ readings, userRole }: HistoryTableProps) {
   return (
     <>
       <div className="overflow-x-auto">
-        <table className="w-full text-sm">
+        <table className="w-full text-sm border-separate border-spacing-0">
           <thead>
-            <tr className="bg-bg-elevated border-b border-border">
-              <th className="px-4 py-3 text-left font-semibold text-text-secondary">Date</th>
-              <th className="px-4 py-3 text-left font-semibold text-text-secondary">Meter</th>
-              <th className="px-4 py-3 text-left font-semibold text-text-secondary">Type</th>
-              <th className="px-4 py-3 text-right font-semibold text-text-secondary">Previous</th>
-              <th className="px-4 py-3 text-right font-semibold text-text-secondary">Current</th>
-              <th className="px-4 py-3 text-right font-semibold text-text-secondary">Consumed</th>
-              <th className="px-4 py-3 text-left font-semibold text-text-secondary">Logged By</th>
-              <th className="px-4 py-3 text-left font-semibold text-text-secondary">Timestamp</th>
+            <tr className="sticky top-0 z-10 bg-bg-elevated">
+              <th className="px-3 py-2 text-left font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-border whitespace-nowrap">Date</th>
+              <th className="px-3 py-2 text-left font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-border">Meter</th>
+              <th className="px-3 py-2 text-left font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-border">Type</th>
+              <th className="px-3 py-2 text-right font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-border">Previous</th>
+              <th className="px-3 py-2 text-right font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-border">Current</th>
+              <th className="px-3 py-2 text-right font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-border">Consumed</th>
+              <th className="px-3 py-2 text-left font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-border whitespace-nowrap">Logged By</th>
+              <th className="px-3 py-2 text-left font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-border whitespace-nowrap">Timestamp</th>
               {isAdmin && (
-                <th className="px-4 py-3 text-right font-semibold text-text-secondary">Admin Actions</th>
+                <th className="px-3 py-2 text-right font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-border whitespace-nowrap">Actions</th>
               )}
             </tr>
           </thead>
@@ -123,17 +123,17 @@ export function HistoryTable({ readings, userRole }: HistoryTableProps) {
                 return (
                   <tr
                     key={reading.id}
-                    className={`border-b border-border/50 transition-colors hover:bg-bg-surface-hover ${
-                      idx % 2 === 0 ? 'bg-bg-surface' : 'bg-bg-primary/50'
+                    className={`border-b border-border transition-colors hover:bg-bg-surface-hover ${
+                      idx % 2 === 0 ? 'bg-bg-surface' : 'bg-bg-primary'
                     }`}
                   >
-                    <td className="px-4 py-3 font-medium text-text-primary whitespace-nowrap">
+                    <td className="px-3 py-2 font-medium text-text-primary whitespace-nowrap">
                       {format(new Date(reading.reading_date), 'dd MMM yyyy')}
                     </td>
-                    <td className="px-4 py-3 font-medium text-text-primary">
+                    <td className="px-3 py-2 font-medium text-text-primary">
                       {reading.meter?.name || '—'}
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-3 py-2">
                       <Badge
                         variant={
                           reading.meter?.type === 'incoming' || reading.meter?.type === 'main'
@@ -150,13 +150,13 @@ export function HistoryTable({ readings, userRole }: HistoryTableProps) {
                           : '📊 Outgoing (Sub)'}
                       </Badge>
                     </td>
-                    <td className="px-4 py-3 text-right text-text-secondary tabular-nums">
+                    <td className="px-3 py-2 text-right text-text-secondary tabular-nums">
                       {prevValue != null ? `${prevValue.toLocaleString()} kWh` : '—'}
                     </td>
-                    <td className="px-4 py-3 text-right font-medium text-text-primary tabular-nums">
+                    <td className="px-3 py-2 text-right font-medium text-text-primary tabular-nums">
                       {Number(reading.reading_value).toLocaleString()} kWh
                     </td>
-                    <td className="px-4 py-3 text-right">
+                    <td className="px-3 py-2 text-right">
                       {reading.usage != null ? (
                         <span className="font-bold text-accent tabular-nums">
                           {Number(reading.usage).toLocaleString()} kWh
@@ -165,30 +165,42 @@ export function HistoryTable({ readings, userRole }: HistoryTableProps) {
                         <span className="text-text-muted text-xs">First reading</span>
                       )}
                     </td>
-                    <td className="px-4 py-3 text-text-secondary whitespace-nowrap">
+                    <td className="px-3 py-2 text-text-secondary whitespace-nowrap">
                       {reading.profile?.full_name || '—'}
                     </td>
-                    <td className="px-4 py-3 text-text-muted text-xs whitespace-nowrap">
+                    <td className="px-3 py-2 text-text-muted text-xs whitespace-nowrap">
                       {format(new Date(reading.created_at), 'dd MMM yyyy, HH:mm')}
                     </td>
                     {isAdmin && (
-                      <td className="px-4 py-3 text-right">
+                      <td className="px-3 py-2 text-right">
                         <div className="flex items-center justify-end gap-1">
-                          <Button
-                            variant="ghost"
-                            size="sm"
+                          <button
+                            type="button"
                             onClick={() => handleOpenEdit(reading)}
+                            title="Edit reading"
+                            aria-label="Edit reading"
+                            className="w-7 h-7 inline-flex items-center justify-center rounded-[var(--radius-sm)]
+                              text-text-muted hover:text-accent hover:bg-accent/10 transition-colors cursor-pointer"
                           >
-                            Edit
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
+                            </svg>
+                          </button>
+                          <button
+                            type="button"
                             onClick={() => handleDelete(reading)}
-                            className="text-danger hover:text-danger"
+                            title="Delete reading"
+                            aria-label="Delete reading"
+                            className="w-7 h-7 inline-flex items-center justify-center rounded-[var(--radius-sm)]
+                              text-text-muted hover:text-danger hover:bg-danger/10 transition-colors cursor-pointer"
                           >
-                            Delete
-                          </Button>
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <polyline points="3 6 5 6 21 6" />
+                              <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                              <line x1="10" y1="11" x2="10" y2="17" />
+                              <line x1="14" y1="11" x2="14" y2="17" />
+                            </svg>
+                          </button>
                         </div>
                       </td>
                     )}

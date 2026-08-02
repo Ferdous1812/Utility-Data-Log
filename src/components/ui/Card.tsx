@@ -38,17 +38,14 @@ export function StatCard({ label, value, icon, trend, accentColor = 'var(--color
   const isPositive = trend && trend.value >= 0;
 
   return (
-    <Card className="relative overflow-hidden">
-      {/* Accent glow */}
-      <div
-        className="absolute top-0 right-0 w-24 h-24 rounded-full blur-3xl opacity-10"
-        style={{ backgroundColor: accentColor }}
-      />
+    <Card className="relative overflow-hidden !p-0">
+      {/* Flat accent stripe */}
+      <div className="absolute top-0 left-0 right-0 h-[3px]" style={{ backgroundColor: accentColor }} />
 
-      <div className="flex items-start justify-between relative z-10">
+      <div className="flex items-start justify-between relative z-10 p-5 pt-[22px]">
         <div className="flex flex-col gap-1">
-          <span className="text-sm font-medium text-text-secondary">{label}</span>
-          <span className="text-2xl font-bold text-text-primary tracking-tight">{value}</span>
+          <span className="text-xs font-medium uppercase tracking-wider text-text-secondary">{label}</span>
+          <span className="text-2xl font-semibold text-text-primary tracking-tight tabular-nums">{value}</span>
           {trend && (
             <div className="flex items-center gap-1 mt-1">
               <span
@@ -64,7 +61,7 @@ export function StatCard({ label, value, icon, trend, accentColor = 'var(--color
         </div>
         <div
           className="flex items-center justify-center w-11 h-11 rounded-[var(--radius-md)]"
-          style={{ backgroundColor: `color-mix(in srgb, ${accentColor} 15%, transparent)` }}
+          style={{ backgroundColor: `color-mix(in srgb, ${accentColor} 12%, transparent)` }}
         >
           <div style={{ color: accentColor }}>{icon}</div>
         </div>

@@ -83,7 +83,7 @@ export function CategoryBarChart({ data, unit = 'kWh', emptyMessage }: CategoryB
             tickLine={false}
             axisLine={{ stroke: 'var(--color-border)' }}
           />
-          <Tooltip content={<CustomTooltip unit={unit} />} cursor={{ fill: 'rgba(255,255,255,0.04)' }} />
+          <Tooltip content={<CustomTooltip unit={unit} />} cursor={{ fill: 'rgba(29,78,216,0.06)' }} />
           <Bar dataKey="value" radius={[0, 6, 6, 0]} maxBarSize={22}>
             {withColor.map((d, i) => (
               <Cell key={i} fill={d.fillColor} />
@@ -118,7 +118,7 @@ export function CategoryBarChart({ data, unit = 'kWh', emptyMessage }: CategoryB
           tickLine={false}
           axisLine={{ stroke: 'var(--color-border)' }}
         />
-        <Tooltip content={<CustomTooltip unit={unit} />} cursor={{ fill: 'rgba(255,255,255,0.04)' }} />
+        <Tooltip content={<CustomTooltip unit={unit} />} cursor={{ fill: 'rgba(29,78,216,0.06)' }} />
         <Bar dataKey="value" radius={[6, 6, 0, 0]} maxBarSize={56}>
           {withColor.map((d, i) => (
             <Cell key={i} fill={d.fillColor} />

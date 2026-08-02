@@ -461,14 +461,14 @@ export default function LogReadingPage() {
         ) : (
           <div className="overflow-x-auto max-h-[calc(100vh-280px)] relative">
             <table className="w-full text-sm border-separate border-spacing-0 table-fixed">
-              <thead className="sticky top-0 z-20 bg-bg-elevated shadow-sm">
-                <tr className="border-b border-border">
-                  <th className="sticky left-0 z-30 bg-bg-elevated px-4 py-3 text-left font-semibold text-text-secondary text-sm w-[260px] border-b border-border">Meter Name</th>
-                  <th className="px-4 py-3 text-center font-semibold text-text-secondary text-sm w-[180px] border-b border-border">Previous Reading Date</th>
-                  <th className="px-4 py-3 text-center font-semibold text-text-secondary text-sm w-[180px] border-b border-border">Previous Reading</th>
-                  <th className="px-4 py-3 text-center font-semibold text-text-secondary text-sm w-[180px] border-b border-border">Current Reading Date</th>
-                  <th className="px-4 py-3 text-center font-semibold text-accent text-sm w-[180px] border-b border-border">Current Reading</th>
-                  <th className="px-4 py-3 text-center font-semibold text-text-secondary text-sm w-[180px] border-b border-border">Difference</th>
+              <thead className="sticky top-0 z-20 bg-bg-elevated">
+                <tr>
+                  <th className="sticky left-0 z-30 bg-bg-elevated px-3 py-2.5 text-left font-bold text-[11px] uppercase tracking-wider text-text-secondary w-[260px] border-b-2 border-border">Meter Name</th>
+                  <th className="px-3 py-2.5 text-center font-bold text-[11px] uppercase tracking-wider text-text-secondary w-[180px] border-b-2 border-border">Previous Reading Date</th>
+                  <th className="px-3 py-2.5 text-center font-bold text-[11px] uppercase tracking-wider text-text-secondary w-[180px] border-b-2 border-border">Previous Reading</th>
+                  <th className="px-3 py-2.5 text-center font-bold text-[11px] uppercase tracking-wider text-text-secondary w-[180px] border-b-2 border-border">Current Reading Date</th>
+                  <th className="px-3 py-2.5 text-center font-bold text-[11px] uppercase tracking-wider text-accent w-[180px] border-b-2 border-border">Current Reading</th>
+                  <th className="px-3 py-2.5 text-center font-bold text-[11px] uppercase tracking-wider text-text-secondary w-[180px] border-b-2 border-border">Difference</th>
                 </tr>
               </thead>
               <tbody>
@@ -576,12 +576,12 @@ export default function LogReadingPage() {
           return (
             <tr
               key={row.meter.id}
-              className={`h-14 border-b border-border/50 transition-colors ${
+              className={`h-14 border-b border-border transition-colors ${
                 isSubmitted
                   ? 'bg-success/5 opacity-60'
                   : idx % 2 === 0
-                  ? 'bg-bg-surface'
-                  : 'bg-bg-primary/50'
+                  ? 'bg-bg-surface hover:bg-bg-surface-hover'
+                  : 'bg-bg-primary/50 hover:bg-bg-surface-hover'
               }`}
             >
               {/* Meter Name (Sticky Column) with By-Line */}

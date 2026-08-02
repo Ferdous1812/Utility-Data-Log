@@ -308,7 +308,7 @@ export default function ConsumptionPage() {
     return (
       <tr
         key={row.meter.id}
-        className={`h-14 border-b border-border/50 transition-colors hover:bg-bg-surface-hover ${
+        className={`h-14 border-b border-border transition-colors hover:bg-bg-surface-hover ${
           isGrandchild ? 'bg-bg-primary/60' : isChild ? 'bg-bg-primary/70' : 'bg-bg-surface'
         }`}
       >
@@ -548,16 +548,16 @@ export default function ConsumptionPage() {
 
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
-                    <thead>
+                    <thead className="sticky top-0 z-10 bg-bg-elevated">
                       <tr className="bg-bg-elevated/40 border-b border-border text-xs text-text-secondary">
-                        <th className="px-4 py-2.5 text-left font-semibold">Meter Name</th>
-                        <th className="px-4 py-2.5 text-right font-semibold">Previous Reading</th>
-                        <th className="px-4 py-2.5 text-center font-semibold">Previous Date</th>
-                        <th className="px-4 py-2.5 text-right font-semibold">Current Reading</th>
-                        <th className="px-4 py-2.5 text-center font-semibold">Current Date</th>
-                        <th className="px-4 py-2.5 text-right font-semibold">Difference</th>
-                        <th className="px-4 py-2.5 text-center font-semibold">M.F</th>
-                        <th className="px-4 py-2.5 text-right font-semibold text-warning">Actual Consumption</th>
+                        <th className="px-3 py-2.5 text-left font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-border">Meter Name</th>
+                        <th className="px-3 py-2.5 text-right font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-border">Previous Reading</th>
+                        <th className="px-3 py-2.5 text-center font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-border">Previous Date</th>
+                        <th className="px-3 py-2.5 text-right font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-border">Current Reading</th>
+                        <th className="px-3 py-2.5 text-center font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-border">Current Date</th>
+                        <th className="px-3 py-2.5 text-right font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-border">Difference</th>
+                        <th className="px-3 py-2.5 text-center font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-border">M.F</th>
+                        <th className="px-3 py-2.5 text-right font-bold text-[11px] uppercase tracking-wider text-warning border-b-2 border-border">Actual Consumption</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -654,16 +654,16 @@ export default function ConsumptionPage() {
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
-                  <thead>
+                  <thead className="sticky top-0 z-10 bg-bg-elevated">
                     <tr className="bg-bg-elevated/40 border-b border-border text-xs text-text-secondary">
-                      <th className="px-4 py-2.5 text-left font-semibold">Meter Name</th>
-                      <th className="px-4 py-2.5 text-right font-semibold">Previous Reading</th>
-                      <th className="px-4 py-2.5 text-center font-semibold">Previous Date</th>
-                      <th className="px-4 py-2.5 text-right font-semibold">Current Reading</th>
-                      <th className="px-4 py-2.5 text-center font-semibold">Current Date</th>
-                      <th className="px-4 py-2.5 text-right font-semibold">Difference</th>
-                      <th className="px-4 py-2.5 text-center font-semibold">M.F</th>
-                      <th className="px-4 py-2.5 text-right font-semibold text-warning">Actual Consumption</th>
+                      <th className="px-3 py-2.5 text-left font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-border">Meter Name</th>
+                      <th className="px-3 py-2.5 text-right font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-border">Previous Reading</th>
+                      <th className="px-3 py-2.5 text-center font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-border">Previous Date</th>
+                      <th className="px-3 py-2.5 text-right font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-border">Current Reading</th>
+                      <th className="px-3 py-2.5 text-center font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-border">Current Date</th>
+                      <th className="px-3 py-2.5 text-right font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-border">Difference</th>
+                      <th className="px-3 py-2.5 text-center font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-border">M.F</th>
+                      <th className="px-3 py-2.5 text-right font-bold text-[11px] uppercase tracking-wider text-warning border-b-2 border-border">Actual Consumption</th>
                     </tr>
                   </thead>
                   <tbody>
