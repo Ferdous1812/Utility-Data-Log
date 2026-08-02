@@ -65,28 +65,33 @@ export function MonthlyComparisonChart({ data, series, unit = 'kWh' }: MonthlyCo
     );
   }
 
+  const height = Math.max(280, data.length * series.length * 20 + data.length * 16);
+
   return (
-    <ResponsiveContainer width="100%" height={360}>
-      <BarChart data={data} barGap={3} barCategoryGap="18%" margin={{ top: 10, right: 8, left: 0, bottom: 4 }}>
-        <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" vertical={false} />
+    <ResponsiveContainer width="100%" height={height}>
+      <BarChart data={data} layout="vertical" barGap={3} barCategoryGap="22%" margin={{ top: 10, right: 40, left: 4, bottom: 4 }}>
+        <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" horizontal={false} />
         <XAxis
-          dataKey="month"
-          stroke="var(--color-text-muted)"
-          fontSize={12}
-          tickLine={false}
-          axisLine={{ stroke: 'var(--color-border)' }}
-        />
-        <YAxis
+          type="number"
           stroke="var(--color-text-muted)"
           fontSize={12}
           tickLine={false}
           axisLine={{ stroke: 'var(--color-border)' }}
           tickFormatter={(v) => `${v.toLocaleString()}`}
         />
+        <YAxis
+          type="category"
+          dataKey="month"
+          width={70}
+          stroke="var(--color-text-muted)"
+          fontSize={12}
+          tickLine={false}
+          axisLine={{ stroke: 'var(--color-border)' }}
+        />
         <Tooltip content={<CustomTooltip unit={unit} />} cursor={{ fill: 'rgba(29,78,216,0.06)' }} />
         <Legend wrapperStyle={{ fontSize: '12px', color: 'var(--color-text-secondary)' }} />
         {series.map((s) => (
-          <Bar key={s.key} dataKey={s.key} name={s.name} fill={s.color} radius={[4, 4, 0, 0]} maxBarSize={40} />
+          <Bar key={s.key} dataKey={s.key} name={s.name} fill={s.color} radius={[0, 4, 4, 0]} maxBarSize={18} />
         ))}
       </BarChart>
     </ResponsiveContainer>

@@ -14,7 +14,7 @@ import { colorAt } from '@/lib/chartColors';
 import { format, subMonths, endOfMonth, subDays, addDays } from 'date-fns';
 import type { Meter, MeterSection, Unit, UnitAllocation } from '@/lib/types';
 
-type ComparisonRange = 4 | 6 | 12;
+type ComparisonRange = 3 | 6 | 12;
 
 interface ReadingLite {
   id: string;
@@ -393,42 +393,40 @@ export default function DashboardPage() {
         </div>
 
         {/* Global Controls — shared by every chart on this page */}
-        <Card className="p-3.5">
-          <div className="flex flex-wrap items-end gap-3">
-            <div className="w-36">
+        <Card className="p-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="w-24">
               <Select
-                label="Month"
                 value={refMonth}
                 onChange={(e) => setRefMonth(Number(e.target.value))}
                 options={MONTH_NAMES.map((name, idx) => ({ value: String(idx + 1), label: name }))}
+                className="!py-1.5 !text-xs !pl-2.5 !pr-8"
               />
             </div>
-            <div className="w-28">
+            <div className="w-[70px]">
               <Select
-                label="Year"
                 value={refYear}
                 onChange={(e) => setRefYear(Number(e.target.value))}
                 options={yearOptions.map((y) => ({ value: String(y), label: String(y) }))}
+                className="!py-1.5 !text-xs !pl-2.5 !pr-8"
               />
             </div>
-            <div className="flex flex-col gap-1.5">
-              <span className="text-sm font-medium text-text-secondary">Comparison Range</span>
-              <div className="flex items-center gap-1.5">
-                {([4, 6, 12] as ComparisonRange[]).map((n) => (
-                  <button
-                    key={n}
-                    type="button"
-                    onClick={() => setComparisonRange(n)}
-                    className={`px-3.5 py-2.5 rounded-[var(--radius-md)] text-sm font-semibold transition-all ${
-                      comparisonRange === n
-                        ? 'bg-accent text-white shadow-sm'
-                        : 'bg-bg-elevated text-text-secondary hover:text-text-primary border border-border'
-                    }`}
-                  >
-                    {n}M
-                  </button>
-                ))}
-              </div>
+            <div className="w-px h-6 bg-border mx-0.5" />
+            <div className="flex items-center gap-1">
+              {([3, 6, 12] as ComparisonRange[]).map((n) => (
+                <button
+                  key={n}
+                  type="button"
+                  onClick={() => setComparisonRange(n)}
+                  className={`px-2.5 py-1.5 rounded-[var(--radius-sm)] text-xs font-semibold transition-all ${
+                    comparisonRange === n
+                      ? 'bg-accent text-white'
+                      : 'bg-bg-elevated text-text-secondary hover:text-text-primary border border-border'
+                  }`}
+                >
+                  {n}M
+                </button>
+              ))}
             </div>
           </div>
         </Card>
@@ -522,9 +520,9 @@ export default function DashboardPage() {
                 <table className="w-full text-sm table-fixed">
                   <thead>
                     <tr className="sticky top-0 z-10 bg-bg-elevated">
-                      <th className="px-3 py-2.5 text-left font-bold text-[11px] uppercase tracking-wider text-text-secondary w-[38%] border-b-2 border-border">Unit Name</th>
+                      <th className="px-3 py-2.5 text-left font-bold text-[11px] uppercase tracking-wider text-text-secondary w-[25%] border-b-2 border-border">Unit Name</th>
                       <th className="px-3 py-2.5 text-right font-bold text-[11px] uppercase tracking-wider text-text-secondary w-[22%] border-b-2 border-border">kWh</th>
-                      <th className="px-3 py-2.5 text-right font-bold text-[11px] uppercase tracking-wider text-text-secondary w-[220px] border-b-2 border-border">
+                      <th className="px-3 py-2.5 text-right font-bold text-[11px] uppercase tracking-wider text-text-secondary w-[53%] border-b-2 border-border">
                         Relative %
                       </th>
                     </tr>
@@ -549,14 +547,14 @@ export default function DashboardPage() {
                             {u.consumption.toLocaleString(undefined, { maximumFractionDigits: 1 })}
                           </td>
                           <td className="px-4 py-3">
-                            <div className="flex items-center justify-end gap-2">
-                              <div className="h-2 w-24 bg-bg-elevated rounded-full overflow-hidden">
+                            <div className="flex items-center justify-end gap-3">
+                              <div className="h-2 flex-1 bg-bg-elevated rounded-full overflow-hidden">
                                 <div
                                   className="h-full rounded-full transition-all duration-500"
                                   style={{ width: `${Math.min(100, pct)}%`, backgroundColor: u.color }}
                                 />
                               </div>
-                              <span className="text-xs font-semibold text-text-secondary tabular-nums w-12 text-right">
+                              <span className="text-xs font-semibold text-text-secondary tabular-nums w-12 text-right shrink-0">
                                 {pct.toFixed(1)}%
                               </span>
                             </div>

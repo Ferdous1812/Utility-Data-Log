@@ -57,77 +57,39 @@ export function CategoryBarChart({ data, unit = 'kWh', emptyMessage }: CategoryB
   }
 
   const withColor = data.map((d, i) => ({ ...d, fillColor: d.color || colorAt(i) }));
-
-  const horizontal = data.length > 6 || data.some((d) => d.name.length > 14);
-  const height = horizontal ? Math.max(220, data.length * 42) : 300;
-
-  if (horizontal) {
-    return (
-      <ResponsiveContainer width="100%" height={height}>
-        <BarChart data={withColor} layout="vertical" margin={{ top: 4, right: 46, left: 4, bottom: 4 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" horizontal={false} />
-          <XAxis
-            type="number"
-            stroke="var(--color-text-muted)"
-            fontSize={11}
-            tickLine={false}
-            axisLine={{ stroke: 'var(--color-border)' }}
-            tickFormatter={(v) => `${v.toLocaleString()}`}
-          />
-          <YAxis
-            type="category"
-            dataKey="name"
-            width={150}
-            stroke="var(--color-text-secondary)"
-            fontSize={12}
-            tickLine={false}
-            axisLine={{ stroke: 'var(--color-border)' }}
-          />
-          <Tooltip content={<CustomTooltip unit={unit} />} cursor={{ fill: 'rgba(29,78,216,0.06)' }} />
-          <Bar dataKey="value" radius={[0, 6, 6, 0]} maxBarSize={22}>
-            {withColor.map((d, i) => (
-              <Cell key={i} fill={d.fillColor} />
-            ))}
-            <LabelList
-              dataKey="value"
-              position="right"
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              formatter={((v: number) => v.toLocaleString(undefined, { maximumFractionDigits: 0 })) as any}
-              style={{ fill: 'var(--color-text-secondary)', fontSize: 11, fontWeight: 600 }}
-            />
-          </Bar>
-        </BarChart>
-      </ResponsiveContainer>
-    );
-  }
+  const height = Math.max(220, data.length * 42);
 
   return (
     <ResponsiveContainer width="100%" height={height}>
-      <BarChart data={withColor} margin={{ top: 20, right: 8, left: 0, bottom: 4 }} barCategoryGap="24%">
-        <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" vertical={false} />
+      <BarChart data={withColor} layout="vertical" margin={{ top: 4, right: 46, left: 4, bottom: 4 }}>
+        <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" horizontal={false} />
         <XAxis
-          dataKey="name"
+          type="number"
           stroke="var(--color-text-muted)"
-          fontSize={12}
+          fontSize={11}
           tickLine={false}
           axisLine={{ stroke: 'var(--color-border)' }}
+          tickFormatter={(v) => `${v.toLocaleString()}`}
         />
         <YAxis
-          stroke="var(--color-text-muted)"
+          type="category"
+          dataKey="name"
+          width={150}
+          stroke="var(--color-text-secondary)"
           fontSize={12}
           tickLine={false}
           axisLine={{ stroke: 'var(--color-border)' }}
         />
         <Tooltip content={<CustomTooltip unit={unit} />} cursor={{ fill: 'rgba(29,78,216,0.06)' }} />
-        <Bar dataKey="value" radius={[6, 6, 0, 0]} maxBarSize={56}>
+        <Bar dataKey="value" radius={[0, 6, 6, 0]} maxBarSize={22}>
           {withColor.map((d, i) => (
             <Cell key={i} fill={d.fillColor} />
           ))}
           <LabelList
             dataKey="value"
-            position="top"
+            position="right"
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              formatter={((v: number) => v.toLocaleString(undefined, { maximumFractionDigits: 0 })) as any}
+            formatter={((v: number) => v.toLocaleString(undefined, { maximumFractionDigits: 0 })) as any}
             style={{ fill: 'var(--color-text-secondary)', fontSize: 11, fontWeight: 600 }}
           />
         </Bar>
