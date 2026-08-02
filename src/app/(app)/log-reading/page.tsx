@@ -230,24 +230,46 @@ export default function LogReadingPage() {
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet('Log Readings');
 
-    // Page setup: margins (in inches)
+    // Page setup: A4, narrow margins, fit to one page wide, repeat header row when printed
+    worksheet.pageSetup.paperSize = 9; // 9 = A4
+    worksheet.pageSetup.orientation = 'landscape';
+    worksheet.pageSetup.fitToPage = true;
+    worksheet.pageSetup.fitToWidth = 1;
+    worksheet.pageSetup.fitToHeight = 0;
+    worksheet.pageSetup.horizontalCentered = true;
+    worksheet.pageSetup.printTitlesRow = '1:1';
+    // "Narrow" margin preset (inches), same as Excel's built-in Narrow option
     worksheet.pageSetup.margins = {
-      left: 0.5, right: 0.5,
-      top: 0.5, bottom: 0.5,
+      left: 0.25, right: 0.25,
+      top: 0.75, bottom: 0.75,
       header: 0.3, footer: 0.3
     };
 
+    // Print header: 3-line company header, centered
+    worksheet.headerFooter.oddHeader =
+      '&C&"Cambria,Bold"&14ACI Formulations PLC\n' +
+      '&"Cambria,Regular"&11Rajabari, Sreepur, Gazipur\n' +
+      '&"Cambria,Bold"&12Monthly Meter Reading';
+    worksheet.headerFooter.evenHeader = worksheet.headerFooter.oddHeader;
+
+    // Print footer: centered page number
+    worksheet.headerFooter.oddFooter = '&C&"Cambria,Regular"&9Page &P of &N';
+    worksheet.headerFooter.evenFooter = worksheet.headerFooter.oddFooter;
+
     const cambriaFont = { name: 'Cambria', size: 11 };
+
+    // Approximate px -> Excel column-width conversion (Excel width units, ~7px per unit)
+    const pxToColWidth = (px: number) => Number(((px - 5) / 7).toFixed(2));
 
     // Define columns (Removed 'Section')
     worksheet.columns = [
       { header: 'Meter Name', key: 'meterName', width: 20 },
       { header: 'Location', key: 'location', width: 20 },
-      { header: 'Previous Reading Date', key: 'prevDate', width: 20, style: { alignment: { horizontal: 'center' } } },
+      { header: 'Previous Date', key: 'prevDate', width: 20, style: { alignment: { horizontal: 'center' } } },
       { header: 'Previous Reading', key: 'prevReading', width: 15, style: { alignment: { horizontal: 'center' } } },
-      { header: 'Current Reading Date', key: 'currDate', width: 20, style: { alignment: { horizontal: 'center' } } },
-      { header: 'Current Reading', key: 'currReading', width: 15, style: { alignment: { horizontal: 'center' } } },
-      { header: 'Difference', key: 'difference', width: 15, style: { alignment: { horizontal: 'center' } } },
+      { header: 'Current Date', key: 'currDate', width: 20, style: { alignment: { horizontal: 'center' } } },
+      { header: 'Current Reading', key: 'currReading', width: pxToColWidth(140), style: { alignment: { horizontal: 'center' } } },
+      { header: 'Difference', key: 'difference', width: pxToColWidth(160), style: { alignment: { horizontal: 'center' } } },
     ];
 
     // Style the header row
@@ -322,8 +344,10 @@ export default function LogReadingPage() {
       addGroupRows('', outgoingSubSubRows);
     }
 
-    // Auto-fit columns
+    // Auto-fit columns (skip Current Reading & Difference — they keep their fixed pixel widths)
+    const fixedWidthKeys = new Set(['currReading', 'difference']);
     worksheet.columns.forEach((column) => {
+      if (fixedWidthKeys.has(column.key as string)) return;
       let maxLength = 0;
       column.eachCell!({ includeEmpty: true }, (cell) => {
         const columnLength = cell.value ? cell.value.toString().length : 10;
