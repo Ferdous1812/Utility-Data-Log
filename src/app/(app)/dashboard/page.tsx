@@ -247,13 +247,51 @@ export default function DashboardPage() {
     [kwMeters]
   );
 
-  const totalIncoming = sumFor(incomingMeters, refIdx);
-  const totalOutgoingMain = sumFor(outgoingMainMeters, refIdx);
-  const totalOutgoingSub = sumFor([...outgoingSubMeters, ...outgoingSubSubMeters], refIdx);
-  const totalIncomingPrev = sumFor(incomingMeters, prevIdx);
+  // Named-meter lookups for the specific plant formulas below.
+  // Total Incoming    = REB Off-Peak (Main) + REB Peak (Main) + Gas Gen. + Diesel Gen.
+  // Outgoing (Main)   = REB (LT) reading only
+  // Outgoing (Sub)    = sum of all "Outgoing Main"-type meters
+  // Distribution Loss = (REB Off-Peak (Main) + REB Peak (Main)) - REB (LT)
+  const findMeterByName = useCallback(
+    (name: string) =>
+      meters.find((m) => m.name.trim().toLowerCase() === name.trim().toLowerCase()),
+    [meters]
+  );
+  const consumptionForName = useCallback(
+    (name: string, idx: number) => {
+      if (idx < 0) return 0;
+      const m = findMeterByName(name);
+      if (!m) return 0;
+      return meterMonthlyConsumption.get(m.id)?.[idx] || 0;
+    },
+    [findMeterByName, meterMonthlyConsumption]
+  );
+
+  const NAMED_INCOMING_METERS = ['REB Off-Peak (Main)', 'REB Peak (Main)', 'Gas Gen.', 'Diesel Gen.'];
+  const namedIncomingMeters = useMemo(
+    () => NAMED_INCOMING_METERS.map(findMeterByName).filter((m): m is Meter => !!m),
+    [findMeterByName]
+  );
+  // Flags any configured meter name that doesn't match a real meter, so a typo/rename
+  // in Settings surfaces as a visible warning instead of silently showing 0.
+  const missingNamedMeters = useMemo(
+    () =>
+      [...NAMED_INCOMING_METERS, 'REB (LT)'].filter((name) => !findMeterByName(name)),
+    [findMeterByName]
+  );
+
+  const totalIncoming = sumFor(namedIncomingMeters, refIdx);
+  const totalIncomingPrev = sumFor(namedIncomingMeters, prevIdx);
   const percentChange =
     totalIncomingPrev > 0 ? ((totalIncoming - totalIncomingPrev) / totalIncomingPrev) * 100 : 0;
-  const difference = totalIncoming - (totalOutgoingMain + totalOutgoingSub);
+
+  const rebOffPeak = consumptionForName('REB Off-Peak (Main)', refIdx);
+  const rebPeak = consumptionForName('REB Peak (Main)', refIdx);
+  const rebLT = consumptionForName('REB (LT)', refIdx);
+
+  const totalOutgoingMain = rebLT; // Outgoing Power (Main) card = REB (LT) reading only
+  const totalOutgoingSub = sumFor(outgoingMainMeters, refIdx); // Outgoing Power (Sub) card = sum of all Outgoing Main-type meters
+  const difference = (rebOffPeak + rebPeak) - rebLT; // Distribution Loss / Variance
 
   // ─── Unit-wise Consumption (reference month) ───
   const unitBreakdown = useMemo(() => {
@@ -402,6 +440,20 @@ export default function DashboardPage() {
         </div>
       ) : (
         <>
+          {missingNamedMeters.length > 0 && (
+            <div className="flex items-start gap-2.5 rounded-[var(--radius-md)] border border-warning/30 bg-warning/10 px-4 py-3 text-sm text-warning">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="flex-shrink-0 mt-0.5">
+                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                <line x1="12" y1="9" x2="12" y2="13" />
+                <line x1="12" y1="17" x2="12.01" y2="17" />
+              </svg>
+              <span>
+                <strong>Incoming/Loss totals may be incomplete.</strong> No meter found matching:{' '}
+                {missingNamedMeters.map((n) => `"${n}"`).join(', ')}. Check meter names in Settings.
+              </span>
+            </div>
+          )}
+
           {/* Stats Cards */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 stagger-children">
             <StatCard
@@ -467,12 +519,12 @@ export default function DashboardPage() {
               </div>
             ) : (
               <div className="overflow-x-auto">
-                <table className="w-full text-sm">
+                <table className="w-full text-sm table-fixed">
                   <thead>
                     <tr className="bg-bg-elevated/60 border-b border-border">
-                      <th className="px-4 py-3 text-left font-semibold text-text-secondary">Unit Name</th>
-                      <th className="px-4 py-3 text-right font-semibold text-text-secondary">kWh</th>
-                      <th className="px-4 py-3 text-right font-semibold text-text-secondary w-[200px]">
+                      <th className="px-4 py-3 text-left font-semibold text-text-secondary w-[38%]">Unit Name</th>
+                      <th className="px-4 py-3 text-right font-semibold text-text-secondary w-[22%]">kWh</th>
+                      <th className="px-4 py-3 text-right font-semibold text-text-secondary w-[220px]">
                         Relative %
                       </th>
                     </tr>
@@ -488,9 +540,9 @@ export default function DashboardPage() {
                           }`}
                         >
                           <td className="px-4 py-3 font-medium text-text-primary">
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 min-w-0">
                               <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: u.color }} />
-                              {u.name}
+                              <span className="truncate" title={u.name}>{u.name}</span>
                             </div>
                           </td>
                           <td className="px-4 py-3 text-right font-bold tabular-nums" style={{ color: u.color }}>
