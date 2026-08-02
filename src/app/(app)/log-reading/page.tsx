@@ -238,10 +238,13 @@ export default function LogReadingPage() {
     worksheet.pageSetup.fitToHeight = 0;
     worksheet.pageSetup.horizontalCentered = true;
     worksheet.pageSetup.printTitlesRow = '1:1';
-    // "Narrow" margin preset (inches), same as Excel's built-in Narrow option
+    // "Narrow" margins, but with extra top margin so the 3-line company
+    // header has room to print without overlapping row 1/2 of the data.
+    // (Header text starts at the "header" margin and grows downward — the
+    // top margin must be taller than header-margin + header text height.)
     worksheet.pageSetup.margins = {
       left: 0.25, right: 0.25,
-      top: 0.75, bottom: 0.75,
+      top: 1.2, bottom: 0.75,
       header: 0.3, footer: 0.3
     };
 
@@ -460,15 +463,15 @@ export default function LogReadingPage() {
           </div>
         ) : (
           <div className="overflow-x-auto max-h-[calc(100vh-280px)] relative">
-            <table className="w-full text-sm border-separate border-spacing-0">
+            <table className="w-full text-sm border-separate border-spacing-0 table-fixed">
               <thead className="sticky top-0 z-20 bg-bg-elevated shadow-sm">
                 <tr className="border-b border-border">
                   <th className="sticky left-0 z-30 bg-bg-elevated px-4 py-3 text-left font-semibold text-text-secondary text-sm w-[260px] border-b border-border">Meter Name</th>
-                  <th className="px-4 py-3 text-center font-semibold text-text-secondary text-sm border-b border-border">Previous Reading Date</th>
-                  <th className="px-4 py-3 text-right font-semibold text-text-secondary text-sm border-b border-border">Previous Reading</th>
-                  <th className="px-4 py-3 text-center font-semibold text-text-secondary text-sm border-b border-border">Current Reading Date</th>
+                  <th className="px-4 py-3 text-center font-semibold text-text-secondary text-sm w-[180px] border-b border-border">Previous Reading Date</th>
+                  <th className="px-4 py-3 text-center font-semibold text-text-secondary text-sm w-[180px] border-b border-border">Previous Reading</th>
+                  <th className="px-4 py-3 text-center font-semibold text-text-secondary text-sm w-[180px] border-b border-border">Current Reading Date</th>
                   <th className="px-4 py-3 text-center font-semibold text-accent text-sm w-[180px] border-b border-border">Current Reading</th>
-                  <th className="px-4 py-3 text-right font-semibold text-text-secondary text-sm border-b border-border">Difference</th>
+                  <th className="px-4 py-3 text-center font-semibold text-text-secondary text-sm w-[180px] border-b border-border">Difference</th>
                 </tr>
               </thead>
               <tbody>
@@ -597,7 +600,7 @@ export default function LogReadingPage() {
               </td>
 
               {/* Previous Reading */}
-              <td className="px-4 py-2.5 text-right tabular-nums text-sm font-medium text-text-primary">
+              <td className="px-4 py-2.5 text-center tabular-nums text-sm font-medium text-text-primary">
                 {row.previousReadingValue.toLocaleString()}
               </td>
 
@@ -684,7 +687,7 @@ export default function LogReadingPage() {
               </td>
 
               {/* Difference: Current Reading - Previous Reading */}
-              <td className="px-4 py-2.5 text-right tabular-nums text-sm font-semibold">
+              <td className="px-4 py-2.5 text-center tabular-nums text-sm font-semibold">
                 {difference !== null ? (
                   <span
                     className={`${
