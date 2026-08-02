@@ -178,13 +178,13 @@ export default function LogReadingPage() {
         });
 
     if (result.success) {
+      const newReadingId = (result as { readingId?: string }).readingId;
       setRows((prev) =>
         prev.map((r) =>
           r.meter.id === meterId
             ? {
                 ...r,
-                readingId:
-                  'readingId' in result && result.readingId ? result.readingId : r.readingId,
+                readingId: newReadingId ?? r.readingId,
               }
             : r
         )
