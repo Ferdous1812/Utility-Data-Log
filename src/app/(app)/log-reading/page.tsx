@@ -485,12 +485,12 @@ export default function LogReadingPage() {
                     return (
                       <React.Fragment key={sec.id}>
                         {/* Section Header Banner */}
-                        <tr className="bg-bg-elevated/80 border-y-2 border-border h-11">
-                          <td colSpan={6} className="px-4 py-2.5 font-extrabold text-sm text-text-primary tracking-wide bg-bg-elevated/90">
-                            <div className="flex items-center gap-2">
-                              <span className="text-lg">{sec.icon}</span>
-                              <span>{sec.name}</span>
-                              <span className="text-xs font-normal text-text-muted">({secRows.length} meters)</span>
+                        <tr className="bg-bg-elevated border-y-2 border-accent/40 h-12 shadow-sm">
+                          <td colSpan={6} className="px-4 py-3">
+                            <div className="flex items-center justify-center gap-2.5">
+                              <span className="text-xl">{sec.icon}</span>
+                              <span className="font-extrabold text-sm text-text-primary tracking-widest uppercase">{sec.name}</span>
+                              <Badge variant="accent">{secRows.length} meters</Badge>
                             </div>
                           </td>
                         </tr>
@@ -513,8 +513,8 @@ export default function LogReadingPage() {
                 {/* Uncategorized Meters if any */}
                 {rows.some((r) => !r.meter.section_id && sections.length > 0) && (
                   <>
-                    <tr className="bg-bg-elevated/80 border-y-2 border-border h-11">
-                      <td colSpan={6} className="px-4 py-2.5 font-extrabold text-sm text-text-muted tracking-wide">
+                    <tr className="bg-bg-elevated border-y-2 border-border h-12 shadow-sm">
+                      <td colSpan={6} className="px-4 py-3 text-center font-extrabold text-sm text-text-muted tracking-widest uppercase">
                         📦 Uncategorized Meters
                       </td>
                     </tr>
@@ -548,16 +548,22 @@ export default function LogReadingPage() {
     if (groupRows.length === 0) return null;
 
     const colorClasses = {
-      warning: 'bg-warning/10 border-warning/20 text-warning',
-      accent: 'bg-accent/10 border-accent/20 text-accent',
-      success: 'bg-success/10 border-success/20 text-success',
-      danger: 'bg-danger/10 border-danger/20 text-danger',
+      warning: 'bg-warning/15 border-warning/30 text-warning',
+      accent: 'bg-accent/15 border-accent/30 text-accent',
+      success: 'bg-success/15 border-success/30 text-success',
+      danger: 'bg-danger/15 border-danger/30 text-danger',
+    };
+    const accentBorderClasses = {
+      warning: 'border-l-4 border-l-warning',
+      accent: 'border-l-4 border-l-accent',
+      success: 'border-l-4 border-l-success',
+      danger: 'border-l-4 border-l-danger',
     };
 
     return (
       <React.Fragment key={label}>
         <tr className={`${colorClasses[color]} border-y h-10`}>
-          <td colSpan={6} className="px-4 py-2 font-bold text-xs uppercase tracking-wider">
+          <td colSpan={6} className={`px-4 py-2 text-center font-bold text-xs uppercase tracking-wider ${accentBorderClasses[color]}`}>
             {label} ({groupRows.length})
           </td>
         </tr>
