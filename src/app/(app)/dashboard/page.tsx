@@ -337,7 +337,44 @@ export default function DashboardPage() {
     [meterMonthlyConsumption, refIdx]
   );
 
-  const incomingItems = useMemo(() => buildCategoryItems(incomingMeters), [buildCategoryItems, incomingMeters]);
+  const incomingItems = useMemo(() => {
+    const REB_OFFPEAK = 'REB Off-Peak (Main)';
+    const REB_PEAK = 'REB Peak (Main)';
+    const isRebPair = (m: Meter) => {
+      const n = m.name.trim().toLowerCase();
+      return n === REB_OFFPEAK.toLowerCase() || n === REB_PEAK.toLowerCase();
+    };
+
+    const others = incomingMeters.filter((m) => !isRebPair(m));
+    const otherItems = buildCategoryItems(others);
+
+    const offPeakMeter = findMeterByName(REB_OFFPEAK);
+    const peakMeter = findMeterByName(REB_PEAK);
+    const offPeakVal = offPeakMeter
+      ? Math.round((meterMonthlyConsumption.get(offPeakMeter.id)?.[refIdx] || 0) * 10) / 10
+      : 0;
+    const peakVal = peakMeter
+      ? Math.round((meterMonthlyConsumption.get(peakMeter.id)?.[refIdx] || 0) * 10) / 10
+      : 0;
+
+    const rebItem: CategoryBarItem | null =
+      offPeakMeter || peakMeter
+        ? {
+            name: 'REB (Main)',
+            segments: [
+              { key: 'offPeak', label: 'Off-Peak', value: offPeakVal, color: '#1D4ED8' },
+              { key: 'peak', label: 'Peak', value: peakVal, color: '#DC2626' },
+            ],
+          }
+        : null;
+
+    const combined = rebItem ? [rebItem, ...otherItems] : otherItems;
+    return combined.sort((a, b) => {
+      const av = a.segments ? a.segments.reduce((s, seg) => s + seg.value, 0) : a.value || 0;
+      const bv = b.segments ? b.segments.reduce((s, seg) => s + seg.value, 0) : b.value || 0;
+      return bv - av;
+    });
+  }, [incomingMeters, buildCategoryItems, findMeterByName, meterMonthlyConsumption, refIdx]);
   const outgoingMainItems = useMemo(
     () => buildCategoryItems(outgoingMainMeters),
     [buildCategoryItems, outgoingMainMeters]
@@ -370,7 +407,28 @@ export default function DashboardPage() {
 
   const gasMeters = useMemo(() => meters.filter(isGasSection), [meters, isGasSection]);
   const hourMeters = useMemo(() => meters.filter(isHourSection), [meters, isHourSection]);
-  const gasItems = useMemo(() => buildDirectionalItems(gasMeters), [buildDirectionalItems, gasMeters]);
+
+  const gasIncomingMeters = useMemo(
+    () => gasMeters.filter((m) => m.type === 'incoming' || m.type === 'main'),
+    [gasMeters]
+  );
+  const gasOutgoingMainMeters = useMemo(
+    () => gasMeters.filter((m) => m.type === 'outgoing_main' || m.type === 'outgoing'),
+    [gasMeters]
+  );
+  const gasOutgoingSubMeters = useMemo(
+    () => gasMeters.filter((m) => m.type === 'outgoing_sub' || m.type === 'submeter' || m.type === 'outgoing_sub_sub'),
+    [gasMeters]
+  );
+
+  const gasMainItems = useMemo(
+    () => buildDirectionalItems([...gasIncomingMeters, ...gasOutgoingMainMeters]),
+    [buildDirectionalItems, gasIncomingMeters, gasOutgoingMainMeters]
+  );
+  const gasSubItems = useMemo(
+    () => buildDirectionalItems([...gasIncomingMeters, ...gasOutgoingSubMeters]),
+    [buildDirectionalItems, gasIncomingMeters, gasOutgoingSubMeters]
+  );
   const hourItems = useMemo(() => buildDirectionalItems(hourMeters), [buildDirectionalItems, hourMeters]);
 
   const gasUnit = sections.find((s) => s.name.toLowerCase().includes('gas'))?.unit || 'm³';
@@ -582,7 +640,7 @@ export default function DashboardPage() {
             <p className="text-xs text-text-secondary mb-4">
               Energy (kWh) meters for {refLabel}, grouped by hierarchy tier
             </p>
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4">
               <Card>
                 <div className="flex items-center gap-2 mb-3">
                   <span className="text-lg">⚡</span>
@@ -640,7 +698,7 @@ export default function DashboardPage() {
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-2">
                     <span className="text-lg">🔥</span>
-                    <h3 className="font-semibold text-text-primary text-sm">Gas Meter</h3>
+                    <h3 className="font-semibold text-text-primary text-sm">Gas Meter — Outgoing (Main)</h3>
                   </div>
                   <div className="flex items-center gap-3 text-[11px] text-text-secondary">
                     <span className="flex items-center gap-1">
@@ -653,7 +711,27 @@ export default function DashboardPage() {
                     </span>
                   </div>
                 </div>
-                <CategoryBarChart data={gasItems} unit={gasUnit} emptyMessage="No gas meters configured." />
+                <CategoryBarChart data={gasMainItems} unit={gasUnit} emptyMessage="No main outgoing gas meters configured." />
+              </Card>
+
+              <Card>
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <span className="text-lg">🔥</span>
+                    <h3 className="font-semibold text-text-primary text-sm">Gas Meter — Outgoing (Sub)</h3>
+                  </div>
+                  <div className="flex items-center gap-3 text-[11px] text-text-secondary">
+                    <span className="flex items-center gap-1">
+                      <span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ backgroundColor: '#D97706' }} />
+                      Incoming
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ backgroundColor: '#1D4ED8' }} />
+                      Outgoing
+                    </span>
+                  </div>
+                </div>
+                <CategoryBarChart data={gasSubItems} unit={gasUnit} emptyMessage="No sub outgoing gas meters configured." />
               </Card>
 
               <Card>

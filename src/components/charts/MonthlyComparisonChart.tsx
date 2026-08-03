@@ -32,6 +32,16 @@ interface MonthlyComparisonChartProps {
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
+function ColoredAxisTick({ x, y, payload, colorMap }: any) {
+  const color = colorMap[payload.value] || 'var(--color-text-secondary)';
+  return (
+    <text x={x} y={y} dy={4} textAnchor="end" fontSize={12} fontWeight={600} fill={color}>
+      {payload.value}
+    </text>
+  );
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function CustomTooltip({ active, payload, label, unit, months }: any) {
   if (!active || !payload || !payload.length) return null;
   const row = payload[0]?.payload;
@@ -73,6 +83,7 @@ export function MonthlyComparisonChart({ months, rows, unit = 'kWh' }: MonthlyCo
   // Flatten each row's per-month values plus a `baseColor` field the
   // tooltip/cells use to derive the correct shade.
   const data = rows.map((r) => ({ name: r.name, baseColor: r.color, ...r.values }));
+  const colorMap = Object.fromEntries(rows.map((r) => [r.name, r.color]));
   const height = Math.max(280, rows.length * months.length * 20 + rows.length * 16);
 
   return (
@@ -92,8 +103,7 @@ export function MonthlyComparisonChart({ months, rows, unit = 'kWh' }: MonthlyCo
             type="category"
             dataKey="name"
             width={110}
-            stroke="var(--color-text-secondary)"
-            fontSize={12}
+            tick={<ColoredAxisTick colorMap={colorMap} />}
             tickLine={false}
             axisLine={{ stroke: 'var(--color-border)' }}
           />
@@ -108,17 +118,11 @@ export function MonthlyComparisonChart({ months, rows, unit = 'kWh' }: MonthlyCo
         </BarChart>
       </ResponsiveContainer>
 
-      {/* Each unit has its own base color; months within a unit are shades
-          of that color (lighter = older, full color = most recent). */}
-      <div className="flex flex-wrap gap-4 mt-2 pt-2 border-t border-border">
-        {rows.map((r) => (
-          <div key={r.id} className="flex items-center gap-1.5 text-xs text-text-secondary">
-            <span className="w-2.5 h-2.5 rounded-sm shrink-0" style={{ backgroundColor: r.color }} />
-            {r.name}
-          </div>
-        ))}
-        <span className="text-[11px] text-text-muted italic">lighter = older month, full color = most recent</span>
-      </div>
+      {/* Unit colors are now shown directly on the axis labels above, so no
+          separate legend is needed here — just a note on the shading. */}
+      <p className="text-[11px] text-text-muted italic mt-2 pt-2 border-t border-border">
+        Lighter = older month, full color = most recent
+      </p>
     </>
   );
 }
