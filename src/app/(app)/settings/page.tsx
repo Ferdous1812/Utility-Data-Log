@@ -800,9 +800,9 @@ export default function SettingsPage() {
                     ) : (
                       <div className="max-h-[60vh] overflow-auto">
                         <table className="responsive-table table-sticky-col w-full text-sm">
-                          <thead className="sticky top-0 z-10 bg-bg-elevated">
+                          <thead className="sticky top-0 z-10 bg-table-header">
                             <tr className="border-b border-border text-xs text-text-secondary">
-                              <th className="px-3 py-2.5 text-left font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-border bg-bg-elevated">
+                              <th className="px-3 py-2.5 text-left font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-table-header-border bg-table-header">
                                 <button
                                   type="button"
                                   onClick={() => handleSort('name')}
@@ -811,7 +811,7 @@ export default function SettingsPage() {
                                   Meter Name
                                 </button>
                               </th>
-                              <th className="px-3 py-2.5 text-left font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-border">
+                              <th className="px-3 py-2.5 text-left font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-table-header-border">
                                 <button
                                   type="button"
                                   onClick={() => handleSort('category')}
@@ -820,7 +820,7 @@ export default function SettingsPage() {
                                   Category
                                 </button>
                               </th>
-                              <th className="px-3 py-2.5 text-left font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-border">
+                              <th className="px-3 py-2.5 text-left font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-table-header-border">
                                 <button
                                   type="button"
                                   onClick={() => handleSort('location')}
@@ -829,7 +829,7 @@ export default function SettingsPage() {
                                   Location
                                 </button>
                               </th>
-                              <th className="px-3 py-2.5 text-left font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-border">
+                              <th className="px-3 py-2.5 text-left font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-table-header-border">
                                 <button
                                   type="button"
                                   onClick={() => handleSort('parent')}
@@ -838,7 +838,7 @@ export default function SettingsPage() {
                                   Parent (Mother)
                                 </button>
                               </th>
-                              <th className="px-3 py-2.5 text-center font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-border">
+                              <th className="px-3 py-2.5 text-center font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-table-header-border">
                                 <button
                                   type="button"
                                   onClick={() => handleSort('mf')}
@@ -847,7 +847,7 @@ export default function SettingsPage() {
                                   M.F
                                 </button>
                               </th>
-                              <th className="px-3 py-2.5 text-right font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-border">Actions</th>
+                              <th className="px-3 py-2.5 text-right font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-table-header-border">Actions</th>
                             </tr>
                           </thead>
                           <tbody>
@@ -962,14 +962,14 @@ export default function SettingsPage() {
                   </div>
                   <div className="max-h-[60vh] overflow-auto">
                     <table className="responsive-table table-sticky-col w-full text-sm">
-                      <thead className="sticky top-0 z-10 bg-bg-elevated">
+                      <thead className="sticky top-0 z-10 bg-table-header">
                         <tr className="border-b border-border text-xs text-text-secondary">
-                          <th className="px-3 py-2.5 text-left font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-border bg-bg-elevated">Meter Name</th>
-                          <th className="px-3 py-2.5 text-left font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-border">Category</th>
-                          <th className="px-3 py-2.5 text-left font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-border">Location</th>
-                          <th className="px-3 py-2.5 text-left font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-border">Parent (Mother)</th>
-                          <th className="px-3 py-2.5 text-center font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-border">M.F</th>
-                          <th className="px-3 py-2.5 text-right font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-border">Actions</th>
+                          <th className="px-3 py-2.5 text-left font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-table-header-border bg-table-header">Meter Name</th>
+                          <th className="px-3 py-2.5 text-left font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-table-header-border">Category</th>
+                          <th className="px-3 py-2.5 text-left font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-table-header-border">Location</th>
+                          <th className="px-3 py-2.5 text-left font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-table-header-border">Parent (Mother)</th>
+                          <th className="px-3 py-2.5 text-center font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-table-header-border">M.F</th>
+                          <th className="px-3 py-2.5 text-right font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-table-header-border">Actions</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -987,14 +987,14 @@ export default function SettingsPage() {
             <Card className="p-0 overflow-hidden">
               <div className="max-h-[60vh] overflow-auto">
                 <table className="responsive-table table-sticky-col w-full text-sm">
-                  <thead className="sticky top-0 z-10 bg-bg-elevated">
+                  <thead className="sticky top-0 z-10 bg-table-header">
                     <tr className="border-b border-border">
-                      <th className="px-3 py-2.5 text-left font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-border bg-bg-elevated">Meter Name</th>
-                      <th className="px-3 py-2.5 text-left font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-border">Category</th>
-                      <th className="px-3 py-2.5 text-left font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-border">Location</th>
-                      <th className="px-3 py-2.5 text-left font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-border">Parent (Mother)</th>
-                      <th className="px-3 py-2.5 text-center font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-border">M.F</th>
-                      <th className="px-3 py-2.5 text-right font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-border">Actions</th>
+                      <th className="px-3 py-2.5 text-left font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-table-header-border bg-table-header">Meter Name</th>
+                      <th className="px-3 py-2.5 text-left font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-table-header-border">Category</th>
+                      <th className="px-3 py-2.5 text-left font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-table-header-border">Location</th>
+                      <th className="px-3 py-2.5 text-left font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-table-header-border">Parent (Mother)</th>
+                      <th className="px-3 py-2.5 text-center font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-table-header-border">M.F</th>
+                      <th className="px-3 py-2.5 text-right font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-table-header-border">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1010,14 +1010,14 @@ export default function SettingsPage() {
           <Card className="p-0 overflow-hidden border border-border/80 shadow-sm mt-4">
             <div className="max-h-[60vh] overflow-auto">
               <table className="responsive-table table-sticky-col w-full text-sm">
-                <thead className="sticky top-0 z-10 bg-bg-elevated">
+                <thead className="sticky top-0 z-10 bg-table-header">
                   <tr className="border-b border-border text-xs text-text-secondary">
-                    <th className="px-3 py-2.5 text-left font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-border bg-bg-elevated">Meter Name</th>
-                    <th className="px-3 py-2.5 text-left font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-border">Category</th>
-                    <th className="px-3 py-2.5 text-left font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-border">Location</th>
-                    <th className="px-3 py-2.5 text-left font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-border">Parent (Mother)</th>
-                    <th className="px-3 py-2.5 text-center font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-border">M.F</th>
-                    <th className="px-3 py-2.5 text-right font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-border">Actions</th>
+                    <th className="px-3 py-2.5 text-left font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-table-header-border bg-table-header">Meter Name</th>
+                    <th className="px-3 py-2.5 text-left font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-table-header-border">Category</th>
+                    <th className="px-3 py-2.5 text-left font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-table-header-border">Location</th>
+                    <th className="px-3 py-2.5 text-left font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-table-header-border">Parent (Mother)</th>
+                    <th className="px-3 py-2.5 text-center font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-table-header-border">M.F</th>
+                    <th className="px-3 py-2.5 text-right font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-table-header-border">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1178,13 +1178,13 @@ export default function SettingsPage() {
               ) : (
                 <div className="max-h-[60vh] overflow-auto">
                   <table className="responsive-table table-sticky-col w-full text-sm">
-                    <thead className="sticky top-0 z-10 bg-bg-elevated">
+                    <thead className="sticky top-0 z-10 bg-table-header">
                       <tr className="border-b border-border text-text-secondary font-semibold">
-                        <th className="px-3 py-2.5 text-left font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-border bg-bg-elevated">Outgoing Meter Name</th>
-                        <th className="px-3 py-2.5 text-left font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-border">Location</th>
-                        <th className="px-3 py-2.5 text-center font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-border">Other Allocations</th>
-                        <th className="px-3 py-2.5 text-center font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-border">Unallocated</th>
-                        <th className="px-3 py-2.5 text-center font-bold text-[11px] uppercase tracking-wider text-accent border-b-2 border-border w-[120px]">Allocation (%)</th>
+                        <th className="px-3 py-2.5 text-left font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-table-header-border bg-table-header">Outgoing Meter Name</th>
+                        <th className="px-3 py-2.5 text-left font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-table-header-border">Location</th>
+                        <th className="px-3 py-2.5 text-center font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-table-header-border">Other Allocations</th>
+                        <th className="px-3 py-2.5 text-center font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-table-header-border">Unallocated</th>
+                        <th className="px-3 py-2.5 text-center font-bold text-[11px] uppercase tracking-wider text-accent border-b-2 border-table-header-border w-[120px]">Allocation (%)</th>
                       </tr>
                     </thead>
                     <tbody>

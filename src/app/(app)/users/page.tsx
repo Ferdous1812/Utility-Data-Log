@@ -84,12 +84,12 @@ export default function UsersPage() {
         ) : (
           <div className="overflow-x-auto">
             <table className="responsive-table table-sticky-col w-full text-sm">
-              <thead className="sticky top-0 z-10 bg-bg-elevated">
-                <tr className="bg-bg-elevated border-b border-border">
-                  <th className="px-3 py-2.5 text-left font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-border bg-bg-elevated">User</th>
-                  <th className="px-3 py-2.5 text-left font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-border">Role</th>
-                  <th className="px-3 py-2.5 text-left font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-border">Joined</th>
-                  <th className="px-3 py-2.5 text-right font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-border">Actions</th>
+              <thead className="sticky top-0 z-10 bg-table-header">
+                <tr className="bg-table-header border-b border-border">
+                  <th className="px-3 py-2.5 text-left font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-table-header-border bg-table-header">User</th>
+                  <th className="px-3 py-2.5 text-left font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-table-header-border">Role</th>
+                  <th className="px-3 py-2.5 text-left font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-table-header-border">Joined</th>
+                  <th className="px-3 py-2.5 text-right font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-table-header-border">Actions</th>
                 </tr>
               </thead>
               <tbody>

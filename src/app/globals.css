@@ -1,17 +1,26 @@
 @import "tailwindcss";
 
+/* Enables `dark:` utility variants, driven by a `.dark` class on <html>
+   (see ThemeToggle.tsx). Most theming below doesn't need `dark:` at all —
+   it works by re-pointing the same CSS custom properties under `.dark`,
+   so every component that already consumes the semantic tokens
+   (bg-bg-surface, text-text-primary, border-border, ...) re-themes for
+   free. `dark:` is kept available for the handful of one-off cases
+   (glow shadows, image treatments) that need it explicitly. */
+@custom-variant dark (&:where(.dark, .dark *));
+
 @theme {
-  /* Industrial Analytical & Professional Enterprise Palette */
-  --color-bg-primary: #F3F4F6;
+  /* Industrial Analytical & Professional Enterprise Palette — Light Mode */
+  --color-bg-primary: #F1F5F9;
   --color-bg-surface: #FFFFFF;
-  --color-bg-surface-hover: #EFF6FF;
-  --color-bg-elevated: #F1F5F9;
+  --color-bg-surface-hover: #F1F5F9;
+  --color-bg-elevated: #F8FAFC;
   --color-border: #E2E8F0;
   --color-border-light: #CBD5E1;
 
-  --color-accent: #1D4ED8;
-  --color-accent-dim: #1E3A8A;
-  --color-accent-glow: rgba(29, 78, 216, 0.12);
+  --color-accent: #2563EB;
+  --color-accent-dim: #1D4ED8;
+  --color-accent-glow: rgba(37, 99, 235, 0.12);
   --color-success: #16A34A;
   --color-success-dim: #15803D;
   --color-warning: #D97706;
@@ -20,18 +29,75 @@
   --color-danger-dim: #B91C1C;
 
   --color-text-primary: #0F172A;
-  --color-text-secondary: #475569;
+  --color-text-secondary: #64748B;
   --color-text-muted: #94A3B8;
+
+  /* Table-specific tokens (header reads distinctly from body rows) */
+  --color-table-header: #F8FAFC;
+  --color-table-header-border: #CBD5E1;
 
   /* Font — clean, legible sans-serif optimized for data */
   --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   --font-serif: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'Roboto Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
 
   /* Spacing & Radius — sharp, precision-engineered (max ~8px) */
   --radius-sm: 3px;
   --radius-md: 4px;
   --radius-lg: 6px;
   --radius-xl: 8px;
+
+  /* Type scale — shifted down ~1px across the board for a denser,
+     more professional terminal feel. text-2xl lands exactly on the
+     23px page-title spec; text-sm lands on the 13px body/subtitle spec. */
+  --text-xs: 0.6875rem;     /* 11px */
+  --text-xs--line-height: 1rem;
+  --text-sm: 0.8125rem;     /* 13px */
+  --text-sm--line-height: 1.25rem;
+  --text-base: 0.9375rem;   /* 15px */
+  --text-base--line-height: 1.5rem;
+  --text-lg: 1.0625rem;     /* 17px */
+  --text-lg--line-height: 1.6rem;
+  --text-xl: 1.1875rem;     /* 19px */
+  --text-xl--line-height: 1.7rem;
+  --text-2xl: 1.4375rem;    /* 23px */
+  --text-2xl--line-height: 1.9rem;
+  --text-3xl: 1.8125rem;    /* 29px */
+  --text-3xl--line-height: 2.2rem;
+}
+
+/* ────────────────────────────────────────────────────────────
+   Dark Mode — Deepest Industrial Black/Blue with Neon Blue accents.
+   Overriding the same custom properties means every existing
+   bg-bg-surface / text-text-primary / border-border / bg-accent
+   usage across the app re-themes automatically.
+   ──────────────────────────────────────────────────────────── */
+.dark {
+  --color-bg-primary: #020617;
+  --color-bg-surface: #0F172A;
+  --color-bg-surface-hover: #1E293B;
+  --color-bg-elevated: #0B1120;
+  --color-border: #1E293B;
+  --color-border-light: #334155;
+
+  --color-accent: #38BDF8;
+  --color-accent-dim: #0EA5E9;
+  --color-accent-glow: rgba(56, 189, 248, 0.35);
+  --color-success: #22C55E;
+  --color-success-dim: #16A34A;
+  --color-warning: #FBBF24;
+  --color-warning-dim: #D97706;
+  --color-danger: #EF4444;
+  --color-danger-dim: #DC2626;
+
+  --color-text-primary: #F8FAFC;
+  --color-text-secondary: #94A3B8;
+  --color-text-muted: #64748B;
+
+  --color-table-header: #020617;
+  --color-table-header-border: #38BDF8;
+
+  color-scheme: dark;
 }
 
 @layer base {
@@ -52,6 +118,21 @@
     font-variant-numeric: tabular-nums;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    transition: background-color 0.2s ease, color 0.2s ease;
+  }
+
+  /* Subtle glow on focus/active states in dark mode, matching the
+     "Neon Blue industrial accent" direction from the brief. */
+  .dark *:focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 1px;
+    box-shadow: 0 0 12px 0 var(--color-accent-glow);
+  }
+
+  /* Table headers get a faint neon glow beneath their bottom border
+     in dark mode, echoing the "data terminal" direction. */
+  .dark table thead th {
+    box-shadow: 0 1px 8px -1px var(--color-accent-glow);
   }
 
   /* Scrollbar styling */

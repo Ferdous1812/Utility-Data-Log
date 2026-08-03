@@ -520,9 +520,9 @@ export default function DashboardPage() {
                 <table className="w-full text-sm table-fixed">
                   <thead>
                     <tr className="sticky top-0 z-10 bg-bg-elevated">
-                      <th className="px-3 py-2.5 text-left font-bold text-[11px] uppercase tracking-wider text-text-secondary w-[25%] border-b-2 border-border">Unit Name</th>
-                      <th className="px-3 py-2.5 text-right font-bold text-[11px] uppercase tracking-wider text-text-secondary w-[22%] border-b-2 border-border">kWh</th>
-                      <th className="px-3 py-2.5 text-right font-bold text-[11px] uppercase tracking-wider text-text-secondary w-[53%] border-b-2 border-border">
+                      <th className="px-3 py-2.5 text-left font-bold text-[11px] uppercase tracking-wider text-text-secondary w-[25%] border-b-2 border-table-header-border">Unit Name</th>
+                      <th className="px-3 py-2.5 text-right font-bold text-[11px] uppercase tracking-wider text-text-secondary w-[22%] border-b-2 border-table-header-border">kWh</th>
+                      <th className="px-3 py-2.5 text-right font-bold text-[11px] uppercase tracking-wider text-text-secondary w-[53%] border-b-2 border-table-header-border">
                         Relative %
                       </th>
                     </tr>

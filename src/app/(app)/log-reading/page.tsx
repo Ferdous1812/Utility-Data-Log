@@ -462,14 +462,14 @@ export default function LogReadingPage() {
         ) : (
           <div className="overflow-x-auto max-h-[calc(100vh-280px)] relative">
             <table className="responsive-table w-full text-sm border-separate border-spacing-0 table-fixed">
-              <thead className="sticky top-0 z-20 bg-bg-elevated">
+              <thead className="sticky top-0 z-20 bg-table-header">
                 <tr>
-                  <th className="sticky left-0 z-30 bg-bg-elevated px-3 py-2.5 text-left font-bold text-[11px] uppercase tracking-wider text-text-secondary w-[140px] sm:w-[200px] md:w-[260px] border-b-2 border-border">Meter Name</th>
-                  <th className="bg-bg-elevated px-3 py-2.5 text-center font-bold text-[11px] uppercase tracking-wider text-text-secondary w-[130px] sm:w-[160px] md:w-[180px] border-b-2 border-border">Previous Reading Date</th>
-                  <th className="bg-bg-elevated px-3 py-2.5 text-center font-bold text-[11px] uppercase tracking-wider text-text-secondary w-[130px] sm:w-[160px] md:w-[180px] border-b-2 border-border">Previous Reading</th>
-                  <th className="bg-bg-elevated px-3 py-2.5 text-center font-bold text-[11px] uppercase tracking-wider text-text-secondary w-[130px] sm:w-[160px] md:w-[180px] border-b-2 border-border">Current Reading Date</th>
-                  <th className="bg-bg-elevated px-3 py-2.5 text-center font-bold text-[11px] uppercase tracking-wider text-accent w-[130px] sm:w-[160px] md:w-[180px] border-b-2 border-border">Current Reading</th>
-                  <th className="bg-bg-elevated px-3 py-2.5 text-center font-bold text-[11px] uppercase tracking-wider text-text-secondary w-[130px] sm:w-[160px] md:w-[180px] border-b-2 border-border">Difference</th>
+                  <th className="sticky left-0 z-30 bg-table-header px-3 py-2.5 text-left font-bold text-[11px] uppercase tracking-wider text-text-secondary w-[140px] sm:w-[200px] md:w-[260px] border-b-2 border-table-header-border">Meter Name</th>
+                  <th className="bg-table-header px-3 py-2.5 text-center font-bold text-[11px] uppercase tracking-wider text-text-secondary w-[130px] sm:w-[160px] md:w-[180px] border-b-2 border-table-header-border">Previous Reading Date</th>
+                  <th className="bg-table-header px-3 py-2.5 text-center font-bold text-[11px] uppercase tracking-wider text-text-secondary w-[130px] sm:w-[160px] md:w-[180px] border-b-2 border-table-header-border">Previous Reading</th>
+                  <th className="bg-table-header px-3 py-2.5 text-center font-bold text-[11px] uppercase tracking-wider text-text-secondary w-[130px] sm:w-[160px] md:w-[180px] border-b-2 border-table-header-border">Current Reading Date</th>
+                  <th className="bg-table-header px-3 py-2.5 text-center font-bold text-[11px] uppercase tracking-wider text-accent w-[130px] sm:w-[160px] md:w-[180px] border-b-2 border-table-header-border">Current Reading</th>
+                  <th className="bg-table-header px-3 py-2.5 text-center font-bold text-[11px] uppercase tracking-wider text-text-secondary w-[130px] sm:w-[160px] md:w-[180px] border-b-2 border-table-header-border">Difference</th>
                 </tr>
               </thead>
               <tbody>

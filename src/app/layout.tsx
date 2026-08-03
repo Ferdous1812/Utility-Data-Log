@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { ToastProvider } from "@/components/ui/Toast";
+import { themeInitScript } from "@/components/ThemeToggle";
 
 export const metadata: Metadata = {
   title: "Digital Meter Logbook — Factory Energy Tracking",
@@ -20,6 +21,8 @@ export default function RootLayout({
           href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
           rel="stylesheet"
         />
+        {/* Runs before paint to apply the persisted theme and avoid a flash */}
+        <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
       </head>
       <body className="antialiased">
         <ToastProvider>{children}</ToastProvider>

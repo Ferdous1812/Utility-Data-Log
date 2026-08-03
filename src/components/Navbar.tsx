@@ -3,6 +3,7 @@
 import React from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
+import { ThemeToggle } from '@/components/ThemeToggle';
 import type { Profile } from '@/lib/types';
 
 interface NavbarProps {
@@ -75,6 +76,8 @@ export function Navbar({ profile, sidebarCollapsed, onMenuClick }: NavbarProps) 
             {profile.full_name || 'User'}
           </span>
         </div>
+
+        <ThemeToggle />
 
         <button
           onClick={handleLogout}

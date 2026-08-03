@@ -79,17 +79,17 @@ export function HistoryTable({ readings, userRole }: HistoryTableProps) {
       <div className="overflow-x-auto">
         <table className="responsive-table table-sticky-col w-full text-sm border-separate border-spacing-0">
           <thead>
-            <tr className="sticky top-0 z-10 bg-bg-elevated">
-              <th className="px-3 py-2 text-left font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-border whitespace-nowrap bg-bg-elevated">Date</th>
-              <th className="px-3 py-2 text-left font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-border">Meter</th>
-              <th className="px-3 py-2 text-left font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-border">Type</th>
-              <th className="px-3 py-2 text-right font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-border">Previous</th>
-              <th className="px-3 py-2 text-right font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-border">Current</th>
-              <th className="px-3 py-2 text-right font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-border">Consumed</th>
-              <th className="px-3 py-2 text-left font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-border whitespace-nowrap">Logged By</th>
-              <th className="px-3 py-2 text-left font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-border whitespace-nowrap">Timestamp</th>
+            <tr className="sticky top-0 z-10 bg-table-header">
+              <th className="px-2.5 py-1.5 text-left font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-table-header-border whitespace-nowrap bg-table-header">Date</th>
+              <th className="px-2.5 py-1.5 text-left font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-table-header-border">Meter</th>
+              <th className="px-2.5 py-1.5 text-left font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-table-header-border">Type</th>
+              <th className="px-2.5 py-1.5 text-right font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-table-header-border">Previous</th>
+              <th className="px-2.5 py-1.5 text-right font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-table-header-border">Current</th>
+              <th className="px-2.5 py-1.5 text-right font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-table-header-border">Consumed</th>
+              <th className="px-2.5 py-1.5 text-left font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-table-header-border whitespace-nowrap">Logged By</th>
+              <th className="px-2.5 py-1.5 text-left font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-table-header-border whitespace-nowrap">Timestamp</th>
               {isAdmin && (
-                <th className="px-3 py-2 text-right font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-border whitespace-nowrap">Actions</th>
+                <th className="px-2.5 py-1.5 text-right font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-table-header-border whitespace-nowrap">Actions</th>
               )}
             </tr>
           </thead>
@@ -127,13 +127,13 @@ export function HistoryTable({ readings, userRole }: HistoryTableProps) {
                       idx % 2 === 0 ? 'bg-bg-surface' : 'bg-bg-primary'
                     }`}
                   >
-                    <td className={`px-3 py-2 font-medium text-text-primary whitespace-nowrap ${idx % 2 === 0 ? 'bg-bg-surface' : 'bg-bg-primary'}`}>
+                    <td className={`px-2.5 py-1.5 font-medium text-text-primary whitespace-nowrap ${idx % 2 === 0 ? 'bg-bg-surface' : 'bg-bg-primary'}`}>
                       {format(new Date(reading.reading_date), 'dd MMM yyyy')}
                     </td>
-                    <td className="px-3 py-2 font-medium text-text-primary">
+                    <td className="px-2.5 py-1.5 font-medium text-text-primary">
                       {reading.meter?.name || '—'}
                     </td>
-                    <td className="px-3 py-2">
+                    <td className="px-2.5 py-1.5">
                       <Badge
                         variant={
                           reading.meter?.type === 'incoming' || reading.meter?.type === 'main'
@@ -150,13 +150,13 @@ export function HistoryTable({ readings, userRole }: HistoryTableProps) {
                           : '📊 Outgoing (Sub)'}
                       </Badge>
                     </td>
-                    <td className="px-3 py-2 text-right text-text-secondary tabular-nums">
+                    <td className="px-2.5 py-1.5 text-right text-text-secondary tabular-nums">
                       {prevValue != null ? `${prevValue.toLocaleString()} kWh` : '—'}
                     </td>
-                    <td className="px-3 py-2 text-right font-medium text-text-primary tabular-nums">
+                    <td className="px-2.5 py-1.5 text-right font-medium text-text-primary tabular-nums">
                       {Number(reading.reading_value).toLocaleString()} kWh
                     </td>
-                    <td className="px-3 py-2 text-right">
+                    <td className="px-2.5 py-1.5 text-right">
                       {reading.usage != null ? (
                         <span className="font-bold text-accent tabular-nums">
                           {Number(reading.usage).toLocaleString()} kWh
@@ -165,14 +165,14 @@ export function HistoryTable({ readings, userRole }: HistoryTableProps) {
                         <span className="text-text-muted text-xs">First reading</span>
                       )}
                     </td>
-                    <td className="px-3 py-2 text-text-secondary whitespace-nowrap">
+                    <td className="px-2.5 py-1.5 text-text-secondary whitespace-nowrap">
                       {reading.profile?.full_name || '—'}
                     </td>
-                    <td className="px-3 py-2 text-text-muted text-xs whitespace-nowrap">
+                    <td className="px-2.5 py-1.5 text-text-muted text-xs whitespace-nowrap">
                       {format(new Date(reading.created_at), 'dd MMM yyyy, HH:mm')}
                     </td>
                     {isAdmin && (
-                      <td className="px-3 py-2 text-right">
+                      <td className="px-2.5 py-1.5 text-right">
                         <div className="flex items-center justify-end gap-1">
                           <button
                             type="button"
