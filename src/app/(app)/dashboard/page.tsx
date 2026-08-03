@@ -7,7 +7,6 @@ import { Select } from '@/components/ui/Select';
 import { CategoryBarChart, type CategoryBarItem } from '@/components/charts/CategoryBarChart';
 import {
   MonthlyComparisonChart,
-  type MonthlyComparisonSeries,
   type MonthlyComparisonRow,
 } from '@/components/charts/MonthlyComparisonChart';
 import { colorAt } from '@/lib/chartColors';
@@ -68,7 +67,7 @@ export default function DashboardPage() {
 
   const [refMonth, setRefMonth] = useState(defaultRef.getMonth() + 1);
   const [refYear, setRefYear] = useState(defaultRef.getFullYear());
-  const [comparisonRange, setComparisonRange] = useState<ComparisonRange>(6);
+  const [comparisonRange, setComparisonRange] = useState<ComparisonRange>(3);
 
   const [meters, setMeters] = useState<Meter[]>([]);
   const [sections, setSections] = useState<MeterSection[]>([]);
@@ -307,26 +306,24 @@ export default function DashboardPage() {
   }, [units, allocations, meterMonthlyConsumption, refIdx]);
 
   // ─── Monthly Comparison Chart data (Units) ───
-  const unitSeries: MonthlyComparisonSeries[] = useMemo(
-    () => units.map((u, i) => ({ key: u.id, name: u.name, color: colorAt(i) })),
-    [units]
-  );
-
+  // One row per Major Unit; each row carries its own base color plus a
+  // month-keyed values map, so the chart can group each unit's months
+  // together and shade them from that unit's color.
   const unitMonthlyRows: MonthlyComparisonRow[] = useMemo(() => {
-    return monthsList.map((m, idx) => {
-      const row: MonthlyComparisonRow = { month: m.label };
-      units.forEach((u) => {
+    return units.map((u, i) => {
+      const values: Record<string, number> = {};
+      monthsList.forEach((m, idx) => {
         const uAllocs = allocations.filter((a) => a.unit_id === u.id);
         let val = 0;
         uAllocs.forEach((a) => {
           const v = meterMonthlyConsumption.get(a.meter_id)?.[idx] || 0;
           val += v * (Number(a.percentage) / 100);
         });
-        row[u.id] = Math.round(val * 10) / 10;
+        values[m.key] = Math.round(val * 10) / 10;
       });
-      return row;
+      return { id: u.id, name: u.name, color: colorAt(i), values };
     });
-  }, [monthsList, units, allocations, meterMonthlyConsumption]);
+  }, [units, allocations, meterMonthlyConsumption, monthsList]);
 
   // ─── Meter-wise Consumption charts (reference month, KW meters only) ───
   const buildCategoryItems = useCallback(
@@ -576,7 +573,7 @@ export default function DashboardPage() {
                 Last {comparisonRange} months of allocated consumption, ending {refLabel}
               </p>
             </div>
-            <MonthlyComparisonChart data={unitMonthlyRows} series={unitSeries} unit="kWh" />
+            <MonthlyComparisonChart months={monthsList} rows={unitMonthlyRows} unit="kWh" />
           </Card>
 
           {/* Meter-wise Consumption */}
