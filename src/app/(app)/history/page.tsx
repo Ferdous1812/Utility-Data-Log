@@ -1,14 +1,16 @@
 import React from 'react';
-import { getReadingsHistory, getMeters, getCurrentProfile } from '@/lib/queries';
+import { getReadingsHistory, getMeters, getMeterSections, getCurrentProfile } from '@/lib/queries';
 import { Card } from '@/components/ui/Card';
 import { HistoryFilters } from './HistoryFilters';
 import { HistoryTable } from './HistoryTable';
+import { HistoryExportButton } from './HistoryExportButton';
 
 export const dynamic = 'force-dynamic';
 
 interface HistoryPageProps {
   searchParams: Promise<{
-    meter?: string;
+    meters?: string;
+    sections?: string;
     from?: string;
     to?: string;
   }>;
@@ -16,13 +18,18 @@ interface HistoryPageProps {
 
 export default async function HistoryPage({ searchParams }: HistoryPageProps) {
   const params = await searchParams;
-  const [readings, meters, profile] = await Promise.all([
+  const meterIds = params.meters ? params.meters.split(',').filter(Boolean) : [];
+  const sectionIds = params.sections ? params.sections.split(',').filter(Boolean) : [];
+
+  const [readings, meters, sections, profile] = await Promise.all([
     getReadingsHistory({
-      meterId: params.meter,
+      meterIds,
+      sectionIds,
       dateFrom: params.from,
       dateTo: params.to,
     }),
     getMeters(),
+    getMeterSections(),
     getCurrentProfile(),
   ]);
 
@@ -31,17 +38,22 @@ export default async function HistoryPage({ searchParams }: HistoryPageProps) {
   return (
     <div className="max-w-7xl mx-auto space-y-6">
       {/* Page Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-text-primary">Logbook History</h1>
-        <p className="text-sm text-text-secondary mt-1">
-          Complete history of all meter readings with usage calculations
-        </p>
+      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-text-primary">Logbook History</h1>
+          <p className="text-sm text-text-secondary mt-1">
+            Complete history of all meter readings with usage calculations
+          </p>
+        </div>
+        <HistoryExportButton readings={readings} sections={sections} />
       </div>
 
       {/* Filters */}
       <HistoryFilters
         meters={meters}
-        currentMeter={params.meter}
+        sections={sections}
+        currentMeterIds={meterIds}
+        currentSectionIds={sectionIds}
         currentFrom={params.from}
         currentTo={params.to}
       />

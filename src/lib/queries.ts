@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server';
 import { startOfMonth, endOfMonth, subMonths, format } from 'date-fns';
-import type { DashboardStats, MonthlyUsage, Reading, Meter, Profile } from '@/lib/types';
+import type { DashboardStats, MonthlyUsage, Reading, Meter, Profile, MeterSection } from '@/lib/types';
 
 // ─── Dashboard Stats ───
 
@@ -99,6 +99,8 @@ export async function getMonthlyUsageByMeter(): Promise<MonthlyUsage[]> {
 
 export async function getReadingsHistory(filters?: {
   meterId?: string;
+  meterIds?: string[];
+  sectionIds?: string[];
   dateFrom?: string;
   dateTo?: string;
 }): Promise<(Reading & { meter: Meter; profile: Profile })[]> {
@@ -113,11 +115,37 @@ export async function getReadingsHistory(filters?: {
     `)
     .order('reading_date', { ascending: false })
     .order('created_at', { ascending: false })
-    .limit(200);
+    .limit(500);
 
+  // Single-meter filter (legacy) — kept for backwards compatibility.
   if (filters?.meterId) {
     query = query.eq('meter_id', filters.meterId);
   }
+
+  // Multi-select meter filter.
+  if (filters?.meterIds && filters.meterIds.length > 0) {
+    query = query.in('meter_id', filters.meterIds);
+  }
+
+  // Section filter — readings don't carry section_id directly, so resolve
+  // the matching meter ids first and intersect with any meter filter above.
+  if (filters?.sectionIds && filters.sectionIds.length > 0) {
+    const { data: sectionMeters } = await supabase
+      .from('meters')
+      .select('id')
+      .in('section_id', filters.sectionIds);
+
+    const sectionMeterIds = (sectionMeters || []).map((m) => m.id as string);
+
+    const combinedIds =
+      filters.meterIds && filters.meterIds.length > 0
+        ? filters.meterIds.filter((id) => sectionMeterIds.includes(id))
+        : sectionMeterIds;
+
+    // No matches → force an empty result rather than dropping the filter.
+    query = query.in('meter_id', combinedIds.length > 0 ? combinedIds : ['__none__']);
+  }
+
   if (filters?.dateFrom) {
     query = query.gte('reading_date', filters.dateFrom);
   }
@@ -174,6 +202,24 @@ export async function getMeters(): Promise<Meter[]> {
   }
 
   return (data || []) as Meter[];
+}
+
+// ─── Get All Meter Sections (same order used on Settings & Log Reading) ───
+
+export async function getMeterSections(): Promise<MeterSection[]> {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from('meter_sections')
+    .select('*')
+    .order('sort_order', { ascending: true });
+
+  if (error) {
+    console.error('Error fetching meter sections:', error);
+    return [];
+  }
+
+  return (data || []) as MeterSection[];
 }
 
 // ─── Get All Profiles ───

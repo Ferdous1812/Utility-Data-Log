@@ -393,32 +393,32 @@ export default function DashboardPage() {
         </div>
 
         {/* Global Controls — shared by every chart on this page */}
-        <Card className="p-2">
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="w-24">
+        <Card className="px-3 py-2 w-fit max-w-full flex-shrink-0 overflow-x-auto">
+          <div className="flex flex-nowrap items-center gap-2 w-max">
+            <div className="w-[104px]">
               <Select
                 value={refMonth}
                 onChange={(e) => setRefMonth(Number(e.target.value))}
                 options={MONTH_NAMES.map((name, idx) => ({ value: String(idx + 1), label: name }))}
-                className="!py-1.5 !text-xs !pl-2.5 !pr-8"
+                className="!py-1.5 !text-xs !pl-2.5 !pr-7"
               />
             </div>
-            <div className="w-[70px]">
+            <div className="w-[82px]">
               <Select
                 value={refYear}
                 onChange={(e) => setRefYear(Number(e.target.value))}
                 options={yearOptions.map((y) => ({ value: String(y), label: String(y) }))}
-                className="!py-1.5 !text-xs !pl-2.5 !pr-8"
+                className="!py-1.5 !text-xs !pl-2.5 !pr-7"
               />
             </div>
-            <div className="w-px h-6 bg-border mx-0.5" />
-            <div className="flex items-center gap-1">
+            <div className="w-px h-6 bg-border mx-0.5 flex-shrink-0" />
+            <div className="flex items-center gap-1 flex-shrink-0">
               {([3, 6, 12] as ComparisonRange[]).map((n) => (
                 <button
                   key={n}
                   type="button"
                   onClick={() => setComparisonRange(n)}
-                  className={`px-2.5 py-1.5 rounded-[var(--radius-sm)] text-xs font-semibold transition-all ${
+                  className={`px-2.5 py-1.5 rounded-[var(--radius-sm)] text-xs font-semibold transition-all whitespace-nowrap ${
                     comparisonRange === n
                       ? 'bg-accent text-white'
                       : 'bg-bg-elevated text-text-secondary hover:text-text-primary border border-border'

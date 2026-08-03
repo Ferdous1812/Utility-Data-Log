@@ -468,7 +468,7 @@ export default function LogReadingPage() {
                   <th className="bg-table-header px-3 py-2.5 text-center font-bold text-[11px] uppercase tracking-wider text-text-secondary w-[130px] sm:w-[160px] md:w-[180px] border-b-2 border-table-header-border">Previous Reading Date</th>
                   <th className="bg-table-header px-3 py-2.5 text-center font-bold text-[11px] uppercase tracking-wider text-text-secondary w-[130px] sm:w-[160px] md:w-[180px] border-b-2 border-table-header-border">Previous Reading</th>
                   <th className="bg-table-header px-3 py-2.5 text-center font-bold text-[11px] uppercase tracking-wider text-text-secondary w-[130px] sm:w-[160px] md:w-[180px] border-b-2 border-table-header-border">Current Reading Date</th>
-                  <th className="bg-table-header px-3 py-2.5 text-center font-bold text-[11px] uppercase tracking-wider text-accent w-[130px] sm:w-[160px] md:w-[180px] border-b-2 border-table-header-border">Current Reading</th>
+                  <th className="bg-table-header px-3 py-2.5 text-center font-bold text-[11px] uppercase tracking-wider text-accent w-[190px] sm:w-[200px] md:w-[200px] border-b-2 border-table-header-border">Current Reading</th>
                   <th className="bg-table-header px-3 py-2.5 text-center font-bold text-[11px] uppercase tracking-wider text-text-secondary w-[130px] sm:w-[160px] md:w-[180px] border-b-2 border-table-header-border">Difference</th>
                 </tr>
               </thead>
@@ -534,13 +534,6 @@ export default function LogReadingPage() {
     </div>
   );
 
-  function getTypeLabel(type: string) {
-    if (type === 'incoming' || type === 'main') return 'Incoming';
-    if (type === 'outgoing_main' || type === 'outgoing') return 'Outgoing (Main)';
-    if (type === 'outgoing_sub_sub') return 'Sub of Sub';
-    return 'Outgoing (Sub)';
-  }
-
   function renderGroup(
     label: string,
     color: 'warning' | 'accent' | 'success' | 'danger',
@@ -591,8 +584,7 @@ export default function LogReadingPage() {
                   {row.meter.name}
                 </div>
                 <div className="mt-0.5 text-[11px] text-text-muted flex items-center gap-1">
-                  <span>{getTypeLabel(row.meter.type)}</span>
-                  {row.meter.location && <span>· {row.meter.location}</span>}
+                  {row.meter.location && <span>{row.meter.location}</span>}
                 </div>
               </td>
 
@@ -614,7 +606,7 @@ export default function LogReadingPage() {
               </td>
 
               {/* Current Reading Input + Save / Edit Icons */}
-              <td className="px-4 py-2.5 text-sm">
+              <td className="px-2 py-2.5 text-sm">
                 {isSubmitted ? (
                   <div className="w-full flex items-center gap-1.5">
                     <span className="flex-1 min-w-0 text-center font-bold text-success text-sm tabular-nums">
