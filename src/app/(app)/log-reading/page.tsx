@@ -12,6 +12,14 @@ import { format, subDays } from 'date-fns';
 import ExcelJS from 'exceljs';
 import type { Meter, Reading, MeterSection } from '@/lib/types';
 
+// Reading values are always shown right-aligned with exactly two decimal places (xxxx.xx)
+function formatReadingValue(value: number): string {
+  return value.toLocaleString(undefined, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+}
+
 interface MeterRow {
   meter: Meter;
   previousReadingValue: number; // 0 if no previous reading exists
@@ -266,10 +274,10 @@ export default function LogReadingPage() {
       { header: 'Meter Name', key: 'meterName', width: 20 },
       { header: 'Location', key: 'location', width: 20 },
       { header: 'Previous Date', key: 'prevDate', width: 20, style: { alignment: { horizontal: 'center' } } },
-      { header: 'Previous Reading', key: 'prevReading', width: 15, style: { alignment: { horizontal: 'center' } } },
+      { header: 'Previous Reading', key: 'prevReading', width: 15, style: { alignment: { horizontal: 'right' }, numFmt: '0.00' } },
       { header: 'Current Date', key: 'currDate', width: 20, style: { alignment: { horizontal: 'center' } } },
-      { header: 'Current Reading', key: 'currReading', width: pxToColWidth(140), style: { alignment: { horizontal: 'center' } } },
-      { header: 'Difference', key: 'difference', width: pxToColWidth(160), style: { alignment: { horizontal: 'center' } } },
+      { header: 'Current Reading', key: 'currReading', width: pxToColWidth(140), style: { alignment: { horizontal: 'right' }, numFmt: '0.00' } },
+      { header: 'Difference', key: 'difference', width: pxToColWidth(160), style: { alignment: { horizontal: 'right' }, numFmt: '0.00' } },
     ];
 
     // Style the header row
@@ -466,10 +474,10 @@ export default function LogReadingPage() {
                 <tr>
                   <th className="sticky left-0 z-30 bg-table-header px-3 py-2.5 text-left font-bold text-[11px] uppercase tracking-wider text-text-secondary w-[140px] sm:w-[200px] md:w-[260px] border-b-2 border-table-header-border">Meter Name</th>
                   <th className="bg-table-header px-3 py-2.5 text-center font-bold text-[11px] uppercase tracking-wider text-text-secondary w-[130px] sm:w-[160px] md:w-[180px] border-b-2 border-table-header-border">Previous Reading Date</th>
-                  <th className="bg-table-header px-3 py-2.5 text-center font-bold text-[11px] uppercase tracking-wider text-text-secondary w-[130px] sm:w-[160px] md:w-[180px] border-b-2 border-table-header-border">Previous Reading</th>
+                  <th className="bg-table-header px-3 py-2.5 text-right font-bold text-[11px] uppercase tracking-wider text-text-secondary w-[130px] sm:w-[160px] md:w-[180px] border-b-2 border-table-header-border">Previous Reading</th>
                   <th className="bg-table-header px-3 py-2.5 text-center font-bold text-[11px] uppercase tracking-wider text-text-secondary w-[130px] sm:w-[160px] md:w-[180px] border-b-2 border-table-header-border">Current Reading Date</th>
-                  <th className="bg-table-header px-3 py-2.5 text-center font-bold text-[11px] uppercase tracking-wider text-accent w-[190px] sm:w-[200px] md:w-[200px] border-b-2 border-table-header-border">Current Reading</th>
-                  <th className="bg-table-header px-3 py-2.5 text-center font-bold text-[11px] uppercase tracking-wider text-text-secondary w-[130px] sm:w-[160px] md:w-[180px] border-b-2 border-table-header-border">Difference</th>
+                  <th className="bg-table-header px-3 py-2.5 text-right font-bold text-[11px] uppercase tracking-wider text-accent w-[190px] sm:w-[200px] md:w-[200px] border-b-2 border-table-header-border">Current Reading</th>
+                  <th className="bg-table-header px-3 py-2.5 text-right font-bold text-[11px] uppercase tracking-wider text-text-secondary w-[130px] sm:w-[160px] md:w-[180px] border-b-2 border-table-header-border">Difference</th>
                 </tr>
               </thead>
               <tbody>
@@ -596,8 +604,8 @@ export default function LogReadingPage() {
               </td>
 
               {/* Previous Reading */}
-              <td className="px-4 py-2.5 text-center tabular-nums text-sm font-medium text-text-primary">
-                {row.previousReadingValue.toLocaleString()}
+              <td className="px-4 py-2.5 text-right tabular-nums text-sm font-medium text-text-primary">
+                {formatReadingValue(row.previousReadingValue)}
               </td>
 
               {/* Current Reading Date */}
@@ -609,8 +617,8 @@ export default function LogReadingPage() {
               <td className="px-2 py-2.5 text-sm">
                 {isSubmitted ? (
                   <div className="w-full flex items-center gap-1.5">
-                    <span className="flex-1 min-w-0 text-center font-bold text-success text-sm tabular-nums">
-                      {parseFloat(row.currentValue).toLocaleString()}
+                    <span className="flex-1 min-w-0 text-right font-bold text-success text-sm tabular-nums">
+                      {formatReadingValue(parseFloat(row.currentValue))}
                     </span>
                     {isAdmin ? (
                       <button
@@ -653,7 +661,7 @@ export default function LogReadingPage() {
                         }
                       }}
                       disabled={isSaving}
-                      className="flex-1 min-w-0 h-9 px-3 py-1 rounded-[var(--radius-md)] border border-border bg-bg-primary text-text-primary text-center font-semibold tabular-nums text-sm
+                      className="flex-1 min-w-0 h-9 px-3 py-1 rounded-[var(--radius-md)] border border-border bg-bg-primary text-text-primary text-right font-semibold tabular-nums text-sm
                         focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent
                         placeholder:text-text-muted/50 placeholder:font-normal
                         disabled:opacity-50
@@ -685,7 +693,7 @@ export default function LogReadingPage() {
               </td>
 
               {/* Difference: Current Reading - Previous Reading */}
-              <td className="px-4 py-2.5 text-center tabular-nums text-sm font-semibold">
+              <td className="px-4 py-2.5 text-right tabular-nums text-sm font-semibold">
                 {difference !== null ? (
                   <span
                     className={`${
@@ -693,7 +701,7 @@ export default function LogReadingPage() {
                     }`}
                   >
                     {isNegative && '⚠ '}
-                    {difference.toLocaleString()}
+                    {formatReadingValue(difference)}
                   </span>
                 ) : (
                   <span className="text-text-muted text-sm">—</span>

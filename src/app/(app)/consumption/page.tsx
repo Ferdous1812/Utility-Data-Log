@@ -293,6 +293,14 @@ export default function ConsumptionPage() {
     ? `${monthNames[selectedMonth - 1]} ${selectedYear}`
     : `${format(new Date(customStartDate), 'dd MMM yyyy')} → ${format(new Date(customEndDate), 'dd MMM yyyy')}`;
 
+  // Reading values are always shown right-aligned with exactly two decimal places (xxxx.xx)
+  function formatReadingValue(value: number): string {
+    return value.toLocaleString(undefined, {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+  }
+
   function getSectionUnit(sec?: MeterSection | null, meterSectionId?: string | null): string {
     const foundSec = sec || sections.find((s) => s.id === meterSectionId);
     if (foundSec?.unit) return foundSec.unit;
@@ -334,7 +342,7 @@ export default function ConsumptionPage() {
         </td>
         <td className="px-4 py-2.5 text-right text-sm tabular-nums text-text-muted">
           {row.previousReading != null
-            ? row.previousReading.toLocaleString(undefined, { maximumFractionDigits: 2 })
+            ? formatReadingValue(row.previousReading)
             : '—'}
         </td>
         <td className="px-4 py-2.5 text-center text-sm text-text-muted whitespace-nowrap">
@@ -344,7 +352,7 @@ export default function ConsumptionPage() {
         </td>
         <td className="px-4 py-2.5 text-right text-sm tabular-nums text-text-primary font-medium">
           {row.currentReading != null
-            ? row.currentReading.toLocaleString(undefined, { maximumFractionDigits: 2 })
+            ? formatReadingValue(row.currentReading)
             : '—'}
         </td>
         <td className="px-4 py-2.5 text-center text-sm text-text-muted whitespace-nowrap">
@@ -353,9 +361,7 @@ export default function ConsumptionPage() {
             : '—'}
         </td>
         <td className="px-4 py-2.5 text-right text-sm tabular-nums font-medium text-text-primary">
-          {row.difference.toLocaleString(undefined, {
-            maximumFractionDigits: 2,
-          })}
+          {formatReadingValue(row.difference)}
         </td>
         <td className="px-4 py-2.5 text-center text-sm tabular-nums font-bold text-accent">
           {row.multiplicationFactor}×

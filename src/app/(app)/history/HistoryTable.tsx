@@ -14,6 +14,14 @@ import type { Reading, Meter, Profile, UserRole, MeterSection } from '@/lib/type
 
 type HistoryReading = Reading & { meter: Meter; profile: Profile };
 
+// Reading values are always shown right-aligned with exactly two decimal places (xxxx.xx)
+function formatReadingValue(value: number): string {
+  return value.toLocaleString(undefined, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+}
+
 interface HistoryTableProps {
   readings: HistoryReading[];
   userRole: UserRole;
@@ -222,7 +230,7 @@ interface SectionTableProps {
 
 function SectionTable({ readings, isAdmin, onEdit, onDelete }: SectionTableProps) {
   return (
-    <div className="overflow-x-auto">
+    <div className="overflow-auto max-h-[600px]">
       <table className="responsive-table table-sticky-col w-full text-sm border-separate border-spacing-0">
         <thead>
           <tr className="sticky top-0 z-10 bg-table-header">
@@ -231,7 +239,7 @@ function SectionTable({ readings, isAdmin, onEdit, onDelete }: SectionTableProps
             <th className="px-2.5 py-1.5 text-left font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-table-header-border">Type</th>
             <th className="px-2.5 py-1.5 text-right font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-table-header-border">Previous</th>
             <th className="px-2.5 py-1.5 text-right font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-table-header-border">Current</th>
-            <th className="px-2.5 py-1.5 text-right font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-table-header-border">Consumed</th>
+            <th className="px-2.5 py-1.5 text-right font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-table-header-border">Difference</th>
             <th className="px-2.5 py-1.5 text-left font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-table-header-border whitespace-nowrap">Logged By</th>
             <th className="px-2.5 py-1.5 text-left font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-table-header-border whitespace-nowrap">Timestamp</th>
             {isAdmin && (
@@ -277,15 +285,15 @@ function SectionTable({ readings, isAdmin, onEdit, onDelete }: SectionTableProps
                   </Badge>
                 </td>
                 <td className="px-2.5 py-1.5 text-right text-text-secondary tabular-nums">
-                  {prevValue != null ? `${prevValue.toLocaleString()} kWh` : '—'}
+                  {prevValue != null ? formatReadingValue(prevValue) : '—'}
                 </td>
                 <td className="px-2.5 py-1.5 text-right font-medium text-text-primary tabular-nums">
-                  {Number(reading.reading_value).toLocaleString()} kWh
+                  {formatReadingValue(Number(reading.reading_value))}
                 </td>
                 <td className="px-2.5 py-1.5 text-right">
                   {reading.usage != null ? (
                     <span className="font-bold text-accent tabular-nums">
-                      {Number(reading.usage).toLocaleString()} kWh
+                      {formatReadingValue(Number(reading.usage))}
                     </span>
                   ) : (
                     <span className="text-text-muted text-xs">First reading</span>

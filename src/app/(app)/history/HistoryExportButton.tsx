@@ -51,9 +51,9 @@ export function HistoryExportButton({ readings, sections }: HistoryExportButtonP
       { header: 'Date', key: 'date', width: 16, style: { alignment: { horizontal: 'center' } } },
       { header: 'Meter Name', key: 'meterName', width: 24 },
       { header: 'Location', key: 'location', width: 20 },
-      { header: 'Previous Reading', key: 'prevReading', width: pxToColWidth(140), style: { alignment: { horizontal: 'center' } } },
-      { header: 'Current Reading', key: 'currReading', width: pxToColWidth(140), style: { alignment: { horizontal: 'center' } } },
-      { header: 'Consumed', key: 'consumed', width: pxToColWidth(140), style: { alignment: { horizontal: 'center' } } },
+      { header: 'Previous Reading', key: 'prevReading', width: pxToColWidth(140), style: { alignment: { horizontal: 'right' }, numFmt: '0.00' } },
+      { header: 'Current Reading', key: 'currReading', width: pxToColWidth(140), style: { alignment: { horizontal: 'right' }, numFmt: '0.00' } },
+      { header: 'Difference', key: 'consumed', width: pxToColWidth(140), style: { alignment: { horizontal: 'right' }, numFmt: '0.00' } },
       { header: 'Logged By', key: 'loggedBy', width: 20 },
     ];
 
