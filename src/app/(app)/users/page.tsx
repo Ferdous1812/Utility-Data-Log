@@ -83,10 +83,10 @@ export default function UsersPage() {
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="responsive-table table-sticky-col w-full text-sm">
               <thead className="sticky top-0 z-10 bg-bg-elevated">
                 <tr className="bg-bg-elevated border-b border-border">
-                  <th className="px-3 py-2.5 text-left font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-border">User</th>
+                  <th className="px-3 py-2.5 text-left font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-border bg-bg-elevated">User</th>
                   <th className="px-3 py-2.5 text-left font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-border">Role</th>
                   <th className="px-3 py-2.5 text-left font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-border">Joined</th>
                   <th className="px-3 py-2.5 text-right font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-border">Actions</th>
@@ -103,13 +103,13 @@ export default function UsersPage() {
                         idx % 2 === 0 ? 'bg-bg-surface' : 'bg-bg-primary/50'
                       }`}
                     >
-                      <td className="px-4 py-3">
+                      <td className={`px-4 py-3 ${idx % 2 === 0 ? 'bg-bg-surface' : 'bg-bg-primary/50'}`}>
                         <div className="flex items-center gap-3">
                           <div className="flex items-center justify-center w-9 h-9 rounded-full bg-accent/15 text-accent text-sm font-bold flex-shrink-0">
                             {profile.full_name?.charAt(0)?.toUpperCase() || '?'}
                           </div>
-                          <div>
-                            <span className="font-medium text-text-primary block leading-tight">
+                          <div className="min-w-0">
+                            <span className="font-medium text-text-primary block leading-tight truncate">
                               {profile.full_name || 'Unnamed'}
                             </span>
                             {isCurrentUser && (

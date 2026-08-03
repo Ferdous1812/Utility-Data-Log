@@ -8,9 +8,10 @@ import type { Profile } from '@/lib/types';
 interface NavbarProps {
   profile: Profile;
   sidebarCollapsed: boolean;
+  onMenuClick?: () => void;
 }
 
-export function Navbar({ profile, sidebarCollapsed }: NavbarProps) {
+export function Navbar({ profile, sidebarCollapsed, onMenuClick }: NavbarProps) {
   const router = useRouter();
   const supabase = createClient();
 
@@ -23,24 +24,37 @@ export function Navbar({ profile, sidebarCollapsed }: NavbarProps) {
   return (
     <header
       className={`
-        fixed top-0 right-0 h-16 bg-bg-surface/80 backdrop-blur-md border-b border-border z-30
-        flex items-center justify-between px-6
+        fixed top-0 right-0 left-0 h-16 bg-bg-surface/80 backdrop-blur-md border-b border-border z-30
+        flex items-center justify-between px-3 sm:px-4 md:px-6
         transition-all duration-300
-        ${sidebarCollapsed ? 'left-[68px]' : 'left-[240px]'}
+        ${sidebarCollapsed ? 'md:left-[68px]' : 'md:left-[240px]'}
       `}
     >
-      <div className="flex items-center gap-2">
-        <h1 className="text-lg font-semibold text-text-primary">
+      <div className="flex items-center gap-2 min-w-0">
+        {/* Mobile hamburger */}
+        <button
+          onClick={onMenuClick}
+          title="Open menu"
+          aria-label="Open menu"
+          className="flex md:hidden items-center justify-center w-9 h-9 -ml-1 rounded-[var(--radius-md)] text-text-secondary hover:text-text-primary hover:bg-bg-surface-hover transition-colors cursor-pointer flex-shrink-0"
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="3" y1="6" x2="21" y2="6" />
+            <line x1="3" y1="12" x2="21" y2="12" />
+            <line x1="3" y1="18" x2="21" y2="18" />
+          </svg>
+        </button>
+        <h1 className="text-sm sm:text-base md:text-lg font-semibold text-text-primary truncate">
           Digital Meter Logbook
         </h1>
       </div>
 
-      <div className="flex items-center gap-4">
-        <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2 sm:gap-4 flex-shrink-0">
+        <div className="flex items-center gap-2 sm:gap-3">
           {/* User / Admin Icon Avatar */}
           <div
             title={profile.role === 'admin' ? 'Admin' : 'Operator'}
-            className={`flex items-center justify-center w-8 h-8 rounded-full ${
+            className={`flex items-center justify-center w-8 h-8 rounded-full flex-shrink-0 ${
               profile.role === 'admin'
                 ? 'bg-accent/15 text-accent'
                 : 'bg-border/60 text-text-secondary'
@@ -57,7 +71,7 @@ export function Navbar({ profile, sidebarCollapsed }: NavbarProps) {
               </svg>
             )}
           </div>
-          <span className="text-sm font-semibold text-text-primary">
+          <span className="hidden sm:inline text-sm font-semibold text-text-primary truncate max-w-[140px]">
             {profile.full_name || 'User'}
           </span>
         </div>

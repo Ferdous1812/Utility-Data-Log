@@ -120,6 +120,55 @@
   animation: toast-slide-out 0.3s ease-in forwards;
 }
 
+/* ────────────────────────────────────────────────────────────
+   Responsive / Mobile utilities
+   ──────────────────────────────────────────────────────────── */
+
+/* Enlarge tap area of icon-only action buttons (Edit/Delete/Save/etc)
+   to a minimum of 44x44px on touch devices, without changing the
+   visual icon size. Targets any titled button/link, which covers the
+   icon-action buttons throughout tables, the sidebar and the navbar. */
+@media (max-width: 767px) {
+  button[title],
+  a[title] {
+    min-width: 44px;
+    min-height: 44px;
+  }
+}
+
+/* Sticky first column for data tables on small screens, so users keep
+   row context (meter/date/user name) while scrolling horizontally.
+   Opt-in via `.table-sticky-col` — kept separate from `.responsive-table`
+   so tables that already implement their own manual sticky-column /
+   z-index stacking (e.g. the Log Reading grid) aren't affected by it. */
+@media (max-width: 767px) {
+  .table-sticky-col thead th:first-child,
+  .table-sticky-col tbody td:first-child {
+    position: sticky;
+    left: 0;
+    z-index: 5;
+  }
+  .table-sticky-col thead th:first-child {
+    z-index: 15;
+  }
+}
+
+/* Prevent long IDs / hashes / names from breaking mobile layouts */
+@media (max-width: 767px) {
+  .responsive-table {
+    font-size: 13px;
+  }
+  .break-mobile {
+    word-break: break-word;
+    overflow-wrap: anywhere;
+  }
+}
+
+/* Lock body scroll behind an open mobile drawer */
+.mobile-drawer-open {
+  overflow: hidden;
+}
+
 /* Stagger children animation */
 .stagger-children > * {
   animation: fadeIn 0.4s ease-out forwards;

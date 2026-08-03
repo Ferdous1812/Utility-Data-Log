@@ -314,7 +314,7 @@ export default function ConsumptionPage() {
       >
         <td
           className={`px-4 py-2.5 text-sm font-medium ${
-            isGrandchild ? 'pl-14 text-text-muted' : isChild ? 'pl-9 text-text-secondary' : 'text-text-primary'
+            isGrandchild ? 'pl-14 text-text-muted bg-bg-primary/60' : isChild ? 'pl-9 text-text-secondary bg-bg-primary/70' : 'text-text-primary bg-bg-surface'
           }`}
         >
           <div className="flex items-center gap-2">
@@ -547,10 +547,10 @@ export default function ConsumptionPage() {
                 </div>
 
                 <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
+                  <table className="responsive-table table-sticky-col w-full text-sm">
                     <thead className="sticky top-0 z-10 bg-bg-elevated">
                       <tr className="bg-bg-elevated/40 border-b border-border text-xs text-text-secondary">
-                        <th className="px-3 py-2.5 text-left font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-border">Meter Name</th>
+                        <th className="px-3 py-2.5 text-left font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-border bg-bg-elevated">Meter Name</th>
                         <th className="px-3 py-2.5 text-right font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-border">Previous Reading</th>
                         <th className="px-3 py-2.5 text-center font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-border">Previous Date</th>
                         <th className="px-3 py-2.5 text-right font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-border">Current Reading</th>
@@ -653,10 +653,10 @@ export default function ConsumptionPage() {
                 </div>
               </div>
               <div className="overflow-x-auto">
-                <table className="w-full text-sm">
+                <table className="responsive-table table-sticky-col w-full text-sm">
                   <thead className="sticky top-0 z-10 bg-bg-elevated">
                     <tr className="bg-bg-elevated/40 border-b border-border text-xs text-text-secondary">
-                      <th className="px-3 py-2.5 text-left font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-border">Meter Name</th>
+                      <th className="px-3 py-2.5 text-left font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-border bg-bg-elevated">Meter Name</th>
                       <th className="px-3 py-2.5 text-right font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-border">Previous Reading</th>
                       <th className="px-3 py-2.5 text-center font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-border">Previous Date</th>
                       <th className="px-3 py-2.5 text-right font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-border">Current Reading</th>

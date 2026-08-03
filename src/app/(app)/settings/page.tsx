@@ -324,7 +324,7 @@ export default function SettingsPage() {
           isGrandchild ? 'bg-bg-primary/60' : isChild ? 'bg-bg-primary/70' : idx % 2 === 0 ? 'bg-bg-surface' : 'bg-bg-primary/50'
         }`}
       >
-        <td className={`px-3 py-2 font-medium ${isGrandchild ? 'pl-14 text-text-muted' : isChild ? 'pl-9 text-text-secondary' : 'text-text-primary'}`}>
+        <td className={`px-3 py-2 font-medium ${isGrandchild ? 'pl-14 text-text-muted bg-bg-primary/60' : isChild ? 'pl-9 text-text-secondary bg-bg-primary/70' : idx % 2 === 0 ? 'text-text-primary bg-bg-surface' : 'text-text-primary bg-bg-primary/50'}`}>
           <div className="flex items-center gap-2">
             {isGrandchild && <span className="text-danger/70 font-mono text-xs">└─</span>}
             {isChild && !isGrandchild && <span className="text-accent/70 font-mono text-xs">└─</span>}
@@ -664,7 +664,7 @@ export default function SettingsPage() {
       {/* Page Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-text-primary">System Settings</h1>
+          <h1 className="text-xl sm:text-2xl font-bold text-text-primary">System Settings</h1>
           <p className="text-sm text-text-secondary mt-1">
             Configure incoming power feeders, mother panels, submeter hierarchy, and define Major Unit consumption allocations
           </p>
@@ -673,10 +673,10 @@ export default function SettingsPage() {
       </div>
 
       {/* Tabs */}
-      <div className="flex border-b border-border">
+      <div className="flex border-b border-border overflow-x-auto">
         <button
           onClick={() => setActiveTab('meters')}
-          className={`py-2.5 px-4 font-semibold text-sm transition-all border-b-2 -mb-px ${
+          className={`py-2.5 px-4 font-semibold text-sm transition-all border-b-2 -mb-px whitespace-nowrap ${
             activeTab === 'meters'
               ? 'border-accent text-accent'
               : 'border-transparent text-text-secondary hover:text-text-primary'
@@ -686,7 +686,7 @@ export default function SettingsPage() {
         </button>
         <button
           onClick={() => setActiveTab('units')}
-          className={`py-2.5 px-4 font-semibold text-sm transition-all border-b-2 -mb-px ${
+          className={`py-2.5 px-4 font-semibold text-sm transition-all border-b-2 -mb-px whitespace-nowrap ${
             activeTab === 'units'
               ? 'border-accent text-accent'
               : 'border-transparent text-text-secondary hover:text-text-primary'
@@ -799,10 +799,10 @@ export default function SettingsPage() {
                       </div>
                     ) : (
                       <div className="max-h-[60vh] overflow-auto">
-                        <table className="w-full text-sm">
+                        <table className="responsive-table table-sticky-col w-full text-sm">
                           <thead className="sticky top-0 z-10 bg-bg-elevated">
                             <tr className="border-b border-border text-xs text-text-secondary">
-                              <th className="px-3 py-2.5 text-left font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-border">
+                              <th className="px-3 py-2.5 text-left font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-border bg-bg-elevated">
                                 <button
                                   type="button"
                                   onClick={() => handleSort('name')}
@@ -961,10 +961,10 @@ export default function SettingsPage() {
                     </div>
                   </div>
                   <div className="max-h-[60vh] overflow-auto">
-                    <table className="w-full text-sm">
+                    <table className="responsive-table table-sticky-col w-full text-sm">
                       <thead className="sticky top-0 z-10 bg-bg-elevated">
                         <tr className="border-b border-border text-xs text-text-secondary">
-                          <th className="px-3 py-2.5 text-left font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-border">Meter Name</th>
+                          <th className="px-3 py-2.5 text-left font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-border bg-bg-elevated">Meter Name</th>
                           <th className="px-3 py-2.5 text-left font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-border">Category</th>
                           <th className="px-3 py-2.5 text-left font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-border">Location</th>
                           <th className="px-3 py-2.5 text-left font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-border">Parent (Mother)</th>
@@ -986,10 +986,10 @@ export default function SettingsPage() {
             /* Fallback single table when no sections are defined */
             <Card className="p-0 overflow-hidden">
               <div className="max-h-[60vh] overflow-auto">
-                <table className="w-full text-sm">
+                <table className="responsive-table table-sticky-col w-full text-sm">
                   <thead className="sticky top-0 z-10 bg-bg-elevated">
                     <tr className="border-b border-border">
-                      <th className="px-3 py-2.5 text-left font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-border">Meter Name</th>
+                      <th className="px-3 py-2.5 text-left font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-border bg-bg-elevated">Meter Name</th>
                       <th className="px-3 py-2.5 text-left font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-border">Category</th>
                       <th className="px-3 py-2.5 text-left font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-border">Location</th>
                       <th className="px-3 py-2.5 text-left font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-border">Parent (Mother)</th>
@@ -1009,10 +1009,10 @@ export default function SettingsPage() {
           {/* Add Section Empty Table Placeholder */}
           <Card className="p-0 overflow-hidden border border-border/80 shadow-sm mt-4">
             <div className="max-h-[60vh] overflow-auto">
-              <table className="w-full text-sm">
+              <table className="responsive-table table-sticky-col w-full text-sm">
                 <thead className="sticky top-0 z-10 bg-bg-elevated">
                   <tr className="border-b border-border text-xs text-text-secondary">
-                    <th className="px-3 py-2.5 text-left font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-border">Meter Name</th>
+                    <th className="px-3 py-2.5 text-left font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-border bg-bg-elevated">Meter Name</th>
                     <th className="px-3 py-2.5 text-left font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-border">Category</th>
                     <th className="px-3 py-2.5 text-left font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-border">Location</th>
                     <th className="px-3 py-2.5 text-left font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-border">Parent (Mother)</th>
@@ -1151,8 +1151,8 @@ export default function SettingsPage() {
           {/* Allocation Matrix (Outgoing Meters Only) */}
           <div className="lg:col-span-2">
             <Card className="p-0 overflow-hidden">
-              <div className="p-4 border-b border-border bg-bg-elevated flex items-center justify-between">
-                <div>
+              <div className="p-4 border-b border-border bg-bg-elevated flex items-start sm:items-center justify-between flex-wrap gap-3">
+                <div className="min-w-0">
                   <h2 className="text-lg font-semibold text-text-primary">Meter Allocation Matrix</h2>
                   <p className="text-xs text-text-secondary mt-0.5">
                     {selectedUnit
@@ -1177,10 +1177,10 @@ export default function SettingsPage() {
                 </div>
               ) : (
                 <div className="max-h-[60vh] overflow-auto">
-                  <table className="w-full text-sm">
+                  <table className="responsive-table table-sticky-col w-full text-sm">
                     <thead className="sticky top-0 z-10 bg-bg-elevated">
                       <tr className="border-b border-border text-text-secondary font-semibold">
-                        <th className="px-3 py-2.5 text-left font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-border">Outgoing Meter Name</th>
+                        <th className="px-3 py-2.5 text-left font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-border bg-bg-elevated">Outgoing Meter Name</th>
                         <th className="px-3 py-2.5 text-left font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-border">Location</th>
                         <th className="px-3 py-2.5 text-center font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-border">Other Allocations</th>
                         <th className="px-3 py-2.5 text-center font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-border">Unallocated</th>
@@ -1205,7 +1205,7 @@ export default function SettingsPage() {
                               idx % 2 === 0 ? 'bg-bg-surface' : 'bg-bg-primary/50'
                             }`}
                           >
-                            <td className="px-4 py-3 font-medium text-text-primary">{meter.name}</td>
+                            <td className={`px-4 py-3 font-medium text-text-primary ${idx % 2 === 0 ? 'bg-bg-surface' : 'bg-bg-primary/50'}`}>{meter.name}</td>
                             <td className="px-4 py-3 text-text-secondary">{meter.location}</td>
                             <td className="px-4 py-3 text-center tabular-nums">
                               {otherPct > 0 ? (

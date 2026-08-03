@@ -77,10 +77,10 @@ export function HistoryTable({ readings, userRole }: HistoryTableProps) {
   return (
     <>
       <div className="overflow-x-auto">
-        <table className="w-full text-sm border-separate border-spacing-0">
+        <table className="responsive-table table-sticky-col w-full text-sm border-separate border-spacing-0">
           <thead>
             <tr className="sticky top-0 z-10 bg-bg-elevated">
-              <th className="px-3 py-2 text-left font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-border whitespace-nowrap">Date</th>
+              <th className="px-3 py-2 text-left font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-border whitespace-nowrap bg-bg-elevated">Date</th>
               <th className="px-3 py-2 text-left font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-border">Meter</th>
               <th className="px-3 py-2 text-left font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-border">Type</th>
               <th className="px-3 py-2 text-right font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-border">Previous</th>
@@ -127,7 +127,7 @@ export function HistoryTable({ readings, userRole }: HistoryTableProps) {
                       idx % 2 === 0 ? 'bg-bg-surface' : 'bg-bg-primary'
                     }`}
                   >
-                    <td className="px-3 py-2 font-medium text-text-primary whitespace-nowrap">
+                    <td className={`px-3 py-2 font-medium text-text-primary whitespace-nowrap ${idx % 2 === 0 ? 'bg-bg-surface' : 'bg-bg-primary'}`}>
                       {format(new Date(reading.reading_date), 'dd MMM yyyy')}
                     </td>
                     <td className="px-3 py-2 font-medium text-text-primary">

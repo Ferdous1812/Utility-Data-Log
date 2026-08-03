@@ -12,6 +12,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const supabase = createClient();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [collapsed, setCollapsed] = useState(false);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -40,6 +41,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     loadProfile();
   }, [supabase, router]);
 
+  useEffect(() => {
+    document.body.classList.toggle('mobile-drawer-open', mobileNavOpen);
+    return () => document.body.classList.remove('mobile-drawer-open');
+  }, [mobileNavOpen]);
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-bg-primary">
@@ -61,16 +67,22 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         userRole={profile.role}
         collapsed={collapsed}
         onToggle={() => setCollapsed(!collapsed)}
+        mobileOpen={mobileNavOpen}
+        onMobileClose={() => setMobileNavOpen(false)}
       />
-      <Navbar profile={profile} sidebarCollapsed={collapsed} />
+      <Navbar
+        profile={profile}
+        sidebarCollapsed={collapsed}
+        onMenuClick={() => setMobileNavOpen(true)}
+      />
 
       <main
         className={`
           pt-16 min-h-screen transition-all duration-300
-          ${collapsed ? 'ml-[68px]' : 'ml-[240px]'}
+          ml-0 ${collapsed ? 'md:ml-[68px]' : 'md:ml-[240px]'}
         `}
       >
-        <div className="p-6">{children}</div>
+        <div className="p-3 sm:p-4 md:p-6">{children}</div>
       </main>
     </div>
   );

@@ -11,7 +11,7 @@ export function Card({ children, className = '', hover = false, glow = false }: 
   return (
     <div
       className={`
-        bg-bg-surface border border-border rounded-[var(--radius-lg)] p-5
+        bg-bg-surface border border-border rounded-[var(--radius-lg)] p-4 sm:p-5
         transition-all duration-200
         ${hover ? 'hover:border-accent/40 hover:bg-bg-surface-hover cursor-pointer' : ''}
         ${glow ? 'animate-pulse-glow' : ''}
