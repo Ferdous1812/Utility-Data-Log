@@ -105,16 +105,16 @@ export function CategoryBarChart({ data, unit = 'kWh', emptyMessage }: CategoryB
     return row;
   });
 
-  const height = Math.max(220, rows.length * 42);
+  const height = Math.max(280, rows.length * 48 + 16);
 
   return (
     <ResponsiveContainer width="100%" height={height}>
-      <BarChart data={rows} layout="vertical" margin={{ top: 4, right: 46, left: 4, bottom: 4 }}>
+      <BarChart data={rows} layout="vertical" barGap={3} barCategoryGap="22%" margin={{ top: 10, right: 40, left: 4, bottom: 4 }}>
         <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" horizontal={false} />
         <XAxis
           type="number"
           stroke="var(--color-text-muted)"
-          fontSize={11}
+          fontSize={12}
           tickLine={false}
           axisLine={{ stroke: 'var(--color-border)' }}
           tickFormatter={(v) => `${v.toLocaleString()}`}
@@ -125,6 +125,7 @@ export function CategoryBarChart({ data, unit = 'kWh', emptyMessage }: CategoryB
           width={150}
           stroke="var(--color-text-secondary)"
           fontSize={12}
+          fontWeight={600}
           tickLine={false}
           axisLine={{ stroke: 'var(--color-border)' }}
         />
@@ -136,12 +137,12 @@ export function CategoryBarChart({ data, unit = 'kWh', emptyMessage }: CategoryB
             dataKey={seg.key}
             stackId="segments"
             fill={seg.color}
-            radius={i === 0 ? [6, 0, 0, 6] : i === segmentDefs.length - 1 ? [0, 6, 6, 0] : [0, 0, 0, 0]}
-            maxBarSize={22}
+            radius={i === 0 ? [4, 0, 0, 4] : i === segmentDefs.length - 1 ? [0, 4, 4, 0] : [0, 0, 0, 0]}
+            maxBarSize={18}
           />
         ))}
 
-        <Bar dataKey="value" radius={[0, 6, 6, 0]} maxBarSize={22}>
+        <Bar dataKey="value" radius={[0, 4, 4, 0]} maxBarSize={18}>
           {rows.map((d, i) => (
             <Cell key={i} fill={d.fillColor} />
           ))}

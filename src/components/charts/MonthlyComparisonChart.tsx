@@ -29,6 +29,7 @@ interface MonthlyComparisonChartProps {
   months: MonthlyComparisonMonth[];
   rows: MonthlyComparisonRow[];
   unit?: string;
+  emptyMessage?: string;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -71,11 +72,11 @@ function CustomTooltip({ active, payload, label, unit, months }: any) {
   );
 }
 
-export function MonthlyComparisonChart({ months, rows, unit = 'kWh' }: MonthlyComparisonChartProps) {
+export function MonthlyComparisonChart({ months, rows, unit = 'kWh', emptyMessage }: MonthlyComparisonChartProps) {
   if (!rows.length || !months.length) {
     return (
-      <div className="flex items-center justify-center h-64 text-text-muted">
-        <p className="text-sm">No Major Units configured yet.</p>
+      <div className="flex items-center justify-center h-40 text-text-muted">
+        <p className="text-sm">{emptyMessage || 'No data available for this period'}</p>
       </div>
     );
   }
@@ -117,12 +118,6 @@ export function MonthlyComparisonChart({ months, rows, unit = 'kWh' }: MonthlyCo
           ))}
         </BarChart>
       </ResponsiveContainer>
-
-      {/* Unit colors are now shown directly on the axis labels above, so no
-          separate legend is needed here — just a note on the shading. */}
-      <p className="text-[11px] text-text-muted italic mt-2 pt-2 border-t border-border">
-        Lighter = older month, full color = most recent
-      </p>
     </>
   );
 }

@@ -4,7 +4,6 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { Card, StatCard } from '@/components/ui/Card';
 import { Select } from '@/components/ui/Select';
-import { CategoryBarChart, type CategoryBarItem } from '@/components/charts/CategoryBarChart';
 import {
   MonthlyComparisonChart,
   type MonthlyComparisonRow,
@@ -13,7 +12,7 @@ import { colorAt } from '@/lib/chartColors';
 import { format, subMonths, endOfMonth, subDays, addDays } from 'date-fns';
 import type { Meter, MeterSection, Unit, UnitAllocation } from '@/lib/types';
 
-type ComparisonRange = 3 | 6 | 12;
+type ComparisonRange = 1 | 3 | 6 | 12;
 
 interface ReadingLite {
   id: string;
@@ -67,7 +66,7 @@ export default function DashboardPage() {
 
   const [refMonth, setRefMonth] = useState(defaultRef.getMonth() + 1);
   const [refYear, setRefYear] = useState(defaultRef.getFullYear());
-  const [comparisonRange, setComparisonRange] = useState<ComparisonRange>(3);
+  const [comparisonRange, setComparisonRange] = useState<ComparisonRange>(1);
 
   const [meters, setMeters] = useState<Meter[]>([]);
   const [sections, setSections] = useState<MeterSection[]>([]);
@@ -325,19 +324,26 @@ export default function DashboardPage() {
     });
   }, [units, allocations, meterMonthlyConsumption, monthsList]);
 
-  // ─── Meter-wise Consumption charts (reference month, KW meters only) ───
-  const buildCategoryItems = useCallback(
-    (list: Meter[]): CategoryBarItem[] =>
+  // ─── Meter-wise Consumption charts (multi-month rows, KW meters only) ───
+  // Same shape as the Units chart above: one row per meter, with a value per
+  // month in the selected comparison range, shaded from the row's base color.
+  const lastMonthKey = monthsList[monthsList.length - 1]?.key;
+
+  const buildMonthlyRows = useCallback(
+    (list: Meter[], colorFor: (m: Meter, i: number) => string): MonthlyComparisonRow[] =>
       list
-        .map((m) => ({
-          name: m.name,
-          value: Math.round((meterMonthlyConsumption.get(m.id)?.[refIdx] || 0) * 10) / 10,
-        }))
-        .sort((a, b) => b.value - a.value),
-    [meterMonthlyConsumption, refIdx]
+        .map((m, i) => {
+          const values: Record<string, number> = {};
+          monthsList.forEach((mo, idx) => {
+            values[mo.key] = Math.round((meterMonthlyConsumption.get(m.id)?.[idx] || 0) * 10) / 10;
+          });
+          return { id: m.id, name: m.name, color: colorFor(m, i), values };
+        })
+        .sort((a, b) => (b.values[lastMonthKey] || 0) - (a.values[lastMonthKey] || 0)),
+    [monthsList, meterMonthlyConsumption, lastMonthKey]
   );
 
-  const incomingItems = useMemo(() => {
+  const incomingMonthlyRows: MonthlyComparisonRow[] = useMemo(() => {
     const REB_OFFPEAK = 'REB Off-Peak (Main)';
     const REB_PEAK = 'REB Peak (Main)';
     const isRebPair = (m: Meter) => {
@@ -346,63 +352,52 @@ export default function DashboardPage() {
     };
 
     const others = incomingMeters.filter((m) => !isRebPair(m));
-    const otherItems = buildCategoryItems(others);
+    const otherRows = buildMonthlyRows(others, (_m, i) => colorAt(i + 1));
 
     const offPeakMeter = findMeterByName(REB_OFFPEAK);
     const peakMeter = findMeterByName(REB_PEAK);
-    const offPeakVal = offPeakMeter
-      ? Math.round((meterMonthlyConsumption.get(offPeakMeter.id)?.[refIdx] || 0) * 10) / 10
-      : 0;
-    const peakVal = peakMeter
-      ? Math.round((meterMonthlyConsumption.get(peakMeter.id)?.[refIdx] || 0) * 10) / 10
-      : 0;
+    let rebRow: MonthlyComparisonRow | null = null;
+    if (offPeakMeter || peakMeter) {
+      const values: Record<string, number> = {};
+      monthsList.forEach((mo, idx) => {
+        const offVal = offPeakMeter ? meterMonthlyConsumption.get(offPeakMeter.id)?.[idx] || 0 : 0;
+        const peakVal = peakMeter ? meterMonthlyConsumption.get(peakMeter.id)?.[idx] || 0 : 0;
+        values[mo.key] = Math.round((offVal + peakVal) * 10) / 10;
+      });
+      rebRow = { id: 'reb-main', name: 'REB (Main)', color: colorAt(0), values };
+    }
 
-    const rebItem: CategoryBarItem | null =
-      offPeakMeter || peakMeter
-        ? {
-            name: 'REB (Main)',
-            segments: [
-              { key: 'offPeak', label: 'Off-Peak', value: offPeakVal, color: '#1D4ED8' },
-              { key: 'peak', label: 'Peak', value: peakVal, color: '#DC2626' },
-            ],
-          }
-        : null;
+    const combined = rebRow ? [rebRow, ...otherRows] : otherRows;
+    return combined.sort((a, b) => (b.values[lastMonthKey] || 0) - (a.values[lastMonthKey] || 0));
+  }, [incomingMeters, buildMonthlyRows, findMeterByName, meterMonthlyConsumption, monthsList, lastMonthKey]);
 
-    const combined = rebItem ? [rebItem, ...otherItems] : otherItems;
-    return combined.sort((a, b) => {
-      const av = a.segments ? a.segments.reduce((s, seg) => s + seg.value, 0) : a.value || 0;
-      const bv = b.segments ? b.segments.reduce((s, seg) => s + seg.value, 0) : b.value || 0;
-      return bv - av;
-    });
-  }, [incomingMeters, buildCategoryItems, findMeterByName, meterMonthlyConsumption, refIdx]);
-  const outgoingMainItems = useMemo(
-    () => buildCategoryItems(outgoingMainMeters),
-    [buildCategoryItems, outgoingMainMeters]
+  const outgoingMainMonthlyRows = useMemo(
+    () => buildMonthlyRows(outgoingMainMeters, (_m, i) => colorAt(i)),
+    [buildMonthlyRows, outgoingMainMeters]
   );
-  const outgoingSubItems = useMemo(
-    () => buildCategoryItems(outgoingSubMeters),
-    [buildCategoryItems, outgoingSubMeters]
+  const outgoingSubMonthlyRows = useMemo(
+    () => buildMonthlyRows(outgoingSubMeters, (_m, i) => colorAt(i)),
+    [buildMonthlyRows, outgoingSubMeters]
   );
-  const outgoingSubSubItems = useMemo(
-    () => buildCategoryItems(outgoingSubSubMeters),
-    [buildCategoryItems, outgoingSubSubMeters]
+  const outgoingSubSubMonthlyRows = useMemo(
+    () => buildMonthlyRows(outgoingSubSubMeters, (_m, i) => colorAt(i)),
+    [buildMonthlyRows, outgoingSubSubMeters]
   );
 
-  // ─── Gas Meter & Hour Meter charts (Incoming vs Outgoing) ───
-  const buildDirectionalItems = useCallback(
-    (list: Meter[]): CategoryBarItem[] =>
+  // ─── Gas Meter & Hour Meter charts (Incoming vs Outgoing, multi-month rows) ───
+  const buildDirectionalMonthlyRows = useCallback(
+    (list: Meter[]): MonthlyComparisonRow[] =>
       list
         .map((m) => {
           const isIncoming = m.type === 'incoming' || m.type === 'main';
-          return {
-            name: m.name,
-            value: Math.round((meterMonthlyConsumption.get(m.id)?.[refIdx] || 0) * 10) / 10,
-            color: isIncoming ? '#D97706' : '#1D4ED8',
-            sublabel: isIncoming ? 'Incoming' : 'Outgoing',
-          };
+          const values: Record<string, number> = {};
+          monthsList.forEach((mo, idx) => {
+            values[mo.key] = Math.round((meterMonthlyConsumption.get(m.id)?.[idx] || 0) * 10) / 10;
+          });
+          return { id: m.id, name: m.name, color: isIncoming ? '#D97706' : '#1D4ED8', values };
         })
-        .sort((a, b) => b.value - a.value),
-    [meterMonthlyConsumption, refIdx]
+        .sort((a, b) => (b.values[lastMonthKey] || 0) - (a.values[lastMonthKey] || 0)),
+    [monthsList, meterMonthlyConsumption, lastMonthKey]
   );
 
   const gasMeters = useMemo(() => meters.filter(isGasSection), [meters, isGasSection]);
@@ -421,15 +416,18 @@ export default function DashboardPage() {
     [gasMeters]
   );
 
-  const gasMainItems = useMemo(
-    () => buildDirectionalItems([...gasIncomingMeters, ...gasOutgoingMainMeters]),
-    [buildDirectionalItems, gasIncomingMeters, gasOutgoingMainMeters]
+  const gasMainMonthlyRows = useMemo(
+    () => buildDirectionalMonthlyRows([...gasIncomingMeters, ...gasOutgoingMainMeters]),
+    [buildDirectionalMonthlyRows, gasIncomingMeters, gasOutgoingMainMeters]
   );
-  const gasSubItems = useMemo(
-    () => buildDirectionalItems([...gasIncomingMeters, ...gasOutgoingSubMeters]),
-    [buildDirectionalItems, gasIncomingMeters, gasOutgoingSubMeters]
+  const gasSubMonthlyRows = useMemo(
+    () => buildDirectionalMonthlyRows([...gasIncomingMeters, ...gasOutgoingSubMeters]),
+    [buildDirectionalMonthlyRows, gasIncomingMeters, gasOutgoingSubMeters]
   );
-  const hourItems = useMemo(() => buildDirectionalItems(hourMeters), [buildDirectionalItems, hourMeters]);
+  const hourMonthlyRows = useMemo(
+    () => buildDirectionalMonthlyRows(hourMeters),
+    [buildDirectionalMonthlyRows, hourMeters]
+  );
 
   const gasUnit = sections.find((s) => s.name.toLowerCase().includes('gas'))?.unit || 'm³';
   const hourUnit = sections.find((s) => s.name.toLowerCase().includes('hour'))?.unit || 'hrs';
@@ -468,7 +466,7 @@ export default function DashboardPage() {
             </div>
             <div className="w-px h-6 bg-border mx-0.5 flex-shrink-0" />
             <div className="flex items-center gap-1 flex-shrink-0">
-              {([3, 6, 12] as ComparisonRange[]).map((n) => (
+              {([1, 3, 6, 12] as ComparisonRange[]).map((n) => (
                 <button
                   key={n}
                   type="button"
@@ -638,26 +636,32 @@ export default function DashboardPage() {
           <div>
             <h2 className="text-lg font-semibold text-text-primary mb-1">Meter-wise Consumption</h2>
             <p className="text-xs text-text-secondary mb-4">
-              Energy (kWh) meters for {refLabel}, grouped by hierarchy tier
+              Energy (kWh) meters · last {comparisonRange} month{comparisonRange > 1 ? 's' : ''}, ending {refLabel}, grouped by hierarchy tier
             </p>
             <div className="grid grid-cols-1 gap-4">
               <Card>
                 <div className="flex items-center gap-2 mb-3">
                   <span className="text-lg">⚡</span>
                   <h3 className="font-semibold text-text-primary text-sm">Incoming Meters</h3>
-                  <span className="text-xs text-text-muted ml-auto">{incomingItems.length} meters</span>
+                  <span className="text-xs text-text-muted ml-auto">{incomingMonthlyRows.length} meters</span>
                 </div>
-                <CategoryBarChart data={incomingItems} unit="kWh" emptyMessage="No incoming meters configured." />
+                <MonthlyComparisonChart
+                  months={monthsList}
+                  rows={incomingMonthlyRows}
+                  unit="kWh"
+                  emptyMessage="No incoming meters configured."
+                />
               </Card>
 
               <Card>
                 <div className="flex items-center gap-2 mb-3">
                   <span className="text-lg">⚡</span>
                   <h3 className="font-semibold text-text-primary text-sm">Outgoing Meters (Main)</h3>
-                  <span className="text-xs text-text-muted ml-auto">{outgoingMainItems.length} meters</span>
+                  <span className="text-xs text-text-muted ml-auto">{outgoingMainMonthlyRows.length} meters</span>
                 </div>
-                <CategoryBarChart
-                  data={outgoingMainItems}
+                <MonthlyComparisonChart
+                  months={monthsList}
+                  rows={outgoingMainMonthlyRows}
                   unit="kWh"
                   emptyMessage="No main outgoing meters configured."
                 />
@@ -667,19 +671,25 @@ export default function DashboardPage() {
                 <div className="flex items-center gap-2 mb-3">
                   <span className="text-lg">📊</span>
                   <h3 className="font-semibold text-text-primary text-sm">Outgoing Meters (Sub)</h3>
-                  <span className="text-xs text-text-muted ml-auto">{outgoingSubItems.length} meters</span>
+                  <span className="text-xs text-text-muted ml-auto">{outgoingSubMonthlyRows.length} meters</span>
                 </div>
-                <CategoryBarChart data={outgoingSubItems} unit="kWh" emptyMessage="No sub outgoing meters configured." />
+                <MonthlyComparisonChart
+                  months={monthsList}
+                  rows={outgoingSubMonthlyRows}
+                  unit="kWh"
+                  emptyMessage="No sub outgoing meters configured."
+                />
               </Card>
 
               <Card>
                 <div className="flex items-center gap-2 mb-3">
                   <span className="text-lg">📊</span>
                   <h3 className="font-semibold text-text-primary text-sm">Outgoing Meters (Sub of Sub)</h3>
-                  <span className="text-xs text-text-muted ml-auto">{outgoingSubSubItems.length} meters</span>
+                  <span className="text-xs text-text-muted ml-auto">{outgoingSubSubMonthlyRows.length} meters</span>
                 </div>
-                <CategoryBarChart
-                  data={outgoingSubSubItems}
+                <MonthlyComparisonChart
+                  months={monthsList}
+                  rows={outgoingSubSubMonthlyRows}
                   unit="kWh"
                   emptyMessage="No sub-of-sub outgoing meters configured."
                 />
@@ -691,7 +701,7 @@ export default function DashboardPage() {
           <div>
             <h2 className="text-lg font-semibold text-text-primary mb-1">Gas &amp; Hour Meters</h2>
             <p className="text-xs text-text-secondary mb-4">
-              Incoming vs. Outgoing consumption for {refLabel}
+              Incoming vs. Outgoing · last {comparisonRange} month{comparisonRange > 1 ? 's' : ''}, ending {refLabel}
             </p>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               <Card>
@@ -711,7 +721,12 @@ export default function DashboardPage() {
                     </span>
                   </div>
                 </div>
-                <CategoryBarChart data={gasMainItems} unit={gasUnit} emptyMessage="No main outgoing gas meters configured." />
+                <MonthlyComparisonChart
+                  months={monthsList}
+                  rows={gasMainMonthlyRows}
+                  unit={gasUnit}
+                  emptyMessage="No main outgoing gas meters configured."
+                />
               </Card>
 
               <Card>
@@ -731,9 +746,17 @@ export default function DashboardPage() {
                     </span>
                   </div>
                 </div>
-                <CategoryBarChart data={gasSubItems} unit={gasUnit} emptyMessage="No sub outgoing gas meters configured." />
+                <MonthlyComparisonChart
+                  months={monthsList}
+                  rows={gasSubMonthlyRows}
+                  unit={gasUnit}
+                  emptyMessage="No sub outgoing gas meters configured."
+                />
               </Card>
+            </div>
 
+            {/* Hour Meter always spans the full width, in its own row */}
+            <div className="grid grid-cols-1 gap-4 mt-4">
               <Card>
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-2">
@@ -751,7 +774,12 @@ export default function DashboardPage() {
                     </span>
                   </div>
                 </div>
-                <CategoryBarChart data={hourItems} unit={hourUnit} emptyMessage="No hour meters configured." />
+                <MonthlyComparisonChart
+                  months={monthsList}
+                  rows={hourMonthlyRows}
+                  unit={hourUnit}
+                  emptyMessage="No hour meters configured."
+                />
               </Card>
             </div>
           </div>
