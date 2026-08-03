@@ -779,6 +779,7 @@ export default function DashboardPage() {
                   rows={hourMonthlyRows}
                   unit={hourUnit}
                   emptyMessage="No hour meters configured."
+                  yAxisWidth={150}
                 />
               </Card>
             </div>

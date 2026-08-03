@@ -1,6 +1,5 @@
 import React from 'react';
 import { getReadingsHistory, getMeters, getMeterSections, getCurrentProfile } from '@/lib/queries';
-import { Card } from '@/components/ui/Card';
 import { HistoryFilters } from './HistoryFilters';
 import { HistoryTable } from './HistoryTable';
 import { HistoryExportButton } from './HistoryExportButton';
@@ -58,18 +57,16 @@ export default async function HistoryPage({ searchParams }: HistoryPageProps) {
         currentTo={params.to}
       />
 
-      {/* Data Table with Admin Edit & Delete actions */}
-      <Card className="p-0 overflow-hidden">
-        <HistoryTable readings={readings} userRole={userRole} />
+      {/* Data Tables — one per meter section, with Admin Edit & Delete actions */}
+      <HistoryTable readings={readings} userRole={userRole} sections={sections} />
 
-        {readings.length > 0 && (
-          <div className="px-4 py-3 border-t border-border bg-bg-elevated">
-            <span className="text-xs text-text-muted">
-              Showing {readings.length} reading{readings.length !== 1 ? 's' : ''}
-            </span>
-          </div>
-        )}
-      </Card>
+      {readings.length > 0 && (
+        <div className="px-1">
+          <span className="text-xs text-text-muted">
+            Showing {readings.length} reading{readings.length !== 1 ? 's' : ''} total
+          </span>
+        </div>
+      )}
     </div>
   );
 }

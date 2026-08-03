@@ -30,6 +30,9 @@ interface MonthlyComparisonChartProps {
   rows: MonthlyComparisonRow[];
   unit?: string;
   emptyMessage?: string;
+  /** Width (px) reserved for the Y-axis category labels. Increase this when
+   *  meter/row names are long and get clipped. Defaults to 110. */
+  yAxisWidth?: number;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -72,7 +75,7 @@ function CustomTooltip({ active, payload, label, unit, months }: any) {
   );
 }
 
-export function MonthlyComparisonChart({ months, rows, unit = 'kWh', emptyMessage }: MonthlyComparisonChartProps) {
+export function MonthlyComparisonChart({ months, rows, unit = 'kWh', emptyMessage, yAxisWidth = 110 }: MonthlyComparisonChartProps) {
   if (!rows.length || !months.length) {
     return (
       <div className="flex items-center justify-center h-40 text-text-muted">
@@ -103,7 +106,7 @@ export function MonthlyComparisonChart({ months, rows, unit = 'kWh', emptyMessag
           <YAxis
             type="category"
             dataKey="name"
-            width={110}
+            width={yAxisWidth}
             tick={<ColoredAxisTick colorMap={colorMap} />}
             tickLine={false}
             axisLine={{ stroke: 'var(--color-border)' }}
