@@ -115,20 +115,6 @@ export async function updateUnitAllocations(
     return { success: false, message: 'Only admins can update allocations.' };
   }
 
-  // Saving Direct Assignment rows always confirms the unit is in "direct"
-  // mode, and clears out any leftover Calculated Remainder rule.
-  const { error: modeError } = await supabase
-    .from('units')
-    .update({ allocation_mode: 'direct' })
-    .eq('id', unitId);
-
-  if (modeError) {
-    console.error('Error updating allocation mode:', modeError);
-    return { success: false, message: `Failed to update allocations: ${modeError.message}` };
-  }
-
-  await supabase.from('unit_remainder_rules').delete().eq('unit_id', unitId);
-
   // 1. Delete existing allocations for this unit
   const { error: deleteError } = await supabase
     .from('unit_allocations')
@@ -168,24 +154,36 @@ export async function updateUnitAllocations(
   return { success: true, message: 'Allocations saved successfully!' };
 }
 
-// ─── Save a Calculated Remainder Rule for a Unit ───
-// unit_share = (base_source_meter - SUM(deduction meters)) * remainder_share_percent
-export async function updateUnitRemainderRule(
-  unitId: string,
-  rule: {
-    base_source_meter_id: string;
-    deduction_meter_ids: string[];
-    remainder_share_percent: number;
+// ─── Shared validation for a Calculated Remainder Rule payload ───
+function validateRemainderRulePayload(rule: {
+  base_source_meter_id: string;
+  deduction_meter_ids: string[];
+  remainder_share_percent: number;
+}): string | null {
+  if (!rule.base_source_meter_id) {
+    return 'A Base Source meter is required.';
   }
-): Promise<{ success: boolean; message: string }> {
-  const supabase = await createClient();
+  if (
+    Number.isNaN(rule.remainder_share_percent) ||
+    rule.remainder_share_percent < 0 ||
+    rule.remainder_share_percent > 100
+  ) {
+    return 'Remainder Share % must be between 0 and 100.';
+  }
+  return null;
+}
 
+async function requireAdmin(): Promise<
+  | { ok: true; supabase: Awaited<ReturnType<typeof createClient>> }
+  | { ok: false; message: string }
+> {
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
   if (!user) {
-    return { success: false, message: 'You must be logged in.' };
+    return { ok: false, message: 'You must be logged in.' };
   }
 
   const { data: profile } = await supabase
@@ -195,58 +193,77 @@ export async function updateUnitRemainderRule(
     .single();
 
   if (profile?.role !== 'admin') {
-    return { success: false, message: 'Only admins can update allocations.' };
+    return { ok: false, message: 'Only admins can update allocations.' };
   }
 
-  if (!rule.base_source_meter_id) {
-    return { success: false, message: 'A Base Source meter is required.' };
+  return { ok: true, supabase };
+}
+
+// ─── Add a new Calculated Remainder Rule to a Unit ───
+// A unit can hold multiple remainder rules (e.g. one per shared/unmetered
+// feed), alongside any Direct Assignment rows — the two engines combine.
+// unit_share = (base_source_meter - SUM(deduction meters)) * remainder_share_percent
+export async function addUnitRemainderRule(
+  unitId: string,
+  rule: {
+    base_source_meter_id: string;
+    deduction_meter_ids: string[];
+    remainder_share_percent: number;
+  }
+): Promise<{ success: boolean; message: string }> {
+  const auth = await requireAdmin();
+  if (!auth.ok) return { success: false, message: auth.message };
+  const { supabase } = auth;
+
+  const validationError = validateRemainderRulePayload(rule);
+  if (validationError) return { success: false, message: validationError };
+
+  const { error } = await supabase.from('unit_remainder_rules').insert({
+    unit_id: unitId,
+    base_source_meter_id: rule.base_source_meter_id,
+    deduction_meter_ids: rule.deduction_meter_ids,
+    remainder_share_percent: rule.remainder_share_percent,
+  });
+
+  if (error) {
+    console.error('Error adding remainder rule:', error);
+    return { success: false, message: `Failed to add rule: ${error.message}` };
   }
 
-  if (
-    Number.isNaN(rule.remainder_share_percent) ||
-    rule.remainder_share_percent < 0 ||
-    rule.remainder_share_percent > 100
-  ) {
-    return { success: false, message: 'Remainder Share % must be between 0 and 100.' };
+  revalidatePath('/dashboard');
+  revalidatePath('/settings');
+
+  return { success: true, message: 'Calculated Remainder rule added successfully!' };
+}
+
+// ─── Update an existing Calculated Remainder Rule by its own id ───
+export async function updateUnitRemainderRule(
+  ruleId: string,
+  rule: {
+    base_source_meter_id: string;
+    deduction_meter_ids: string[];
+    remainder_share_percent: number;
   }
+): Promise<{ success: boolean; message: string }> {
+  const auth = await requireAdmin();
+  if (!auth.ok) return { success: false, message: auth.message };
+  const { supabase } = auth;
 
-  // Switching a unit into "calculated_remainder" mode clears any legacy
-  // flat percentage rows so the two engines never overlap for one unit.
-  const { error: modeError } = await supabase
-    .from('units')
-    .update({ allocation_mode: 'calculated_remainder' })
-    .eq('id', unitId);
+  const validationError = validateRemainderRulePayload(rule);
+  if (validationError) return { success: false, message: validationError };
 
-  if (modeError) {
-    console.error('Error updating allocation mode:', modeError);
-    return { success: false, message: `Failed to update allocation mode: ${modeError.message}` };
-  }
-
-  const { error: clearError } = await supabase
-    .from('unit_allocations')
-    .delete()
-    .eq('unit_id', unitId);
-
-  if (clearError) {
-    console.error('Error clearing direct allocations:', clearError);
-    return { success: false, message: `Failed to save rule: ${clearError.message}` };
-  }
-
-  const { error: upsertError } = await supabase
+  const { error } = await supabase
     .from('unit_remainder_rules')
-    .upsert(
-      {
-        unit_id: unitId,
-        base_source_meter_id: rule.base_source_meter_id,
-        deduction_meter_ids: rule.deduction_meter_ids,
-        remainder_share_percent: rule.remainder_share_percent,
-      },
-      { onConflict: 'unit_id' }
-    );
+    .update({
+      base_source_meter_id: rule.base_source_meter_id,
+      deduction_meter_ids: rule.deduction_meter_ids,
+      remainder_share_percent: rule.remainder_share_percent,
+    })
+    .eq('id', ruleId);
 
-  if (upsertError) {
-    console.error('Error saving remainder rule:', upsertError);
-    return { success: false, message: `Failed to save rule: ${upsertError.message}` };
+  if (error) {
+    console.error('Error updating remainder rule:', error);
+    return { success: false, message: `Failed to save rule: ${error.message}` };
   }
 
   revalidatePath('/dashboard');
@@ -255,50 +272,25 @@ export async function updateUnitRemainderRule(
   return { success: true, message: 'Calculated Remainder rule saved successfully!' };
 }
 
-// ─── Switch a Unit back to Direct Assignment mode ───
-export async function updateUnitAllocationMode(
-  unitId: string,
-  mode: 'direct' | 'calculated_remainder'
+// ─── Delete a single Calculated Remainder Rule by its own id ───
+export async function deleteUnitRemainderRule(
+  ruleId: string
 ): Promise<{ success: boolean; message: string }> {
-  const supabase = await createClient();
+  const auth = await requireAdmin();
+  if (!auth.ok) return { success: false, message: auth.message };
+  const { supabase } = auth;
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    return { success: false, message: 'You must be logged in.' };
-  }
-
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('role')
-    .eq('id', user.id)
-    .single();
-
-  if (profile?.role !== 'admin') {
-    return { success: false, message: 'Only admins can update allocations.' };
-  }
-
-  const { error } = await supabase.from('units').update({ allocation_mode: mode }).eq('id', unitId);
+  const { error } = await supabase.from('unit_remainder_rules').delete().eq('id', ruleId);
 
   if (error) {
-    console.error('Error updating allocation mode:', error);
-    return { success: false, message: `Failed to switch mode: ${error.message}` };
-  }
-
-  // Clear the other engine's data for this unit so stale rows never
-  // silently resurface if the operator switches modes again later.
-  if (mode === 'direct') {
-    await supabase.from('unit_remainder_rules').delete().eq('unit_id', unitId);
-  } else {
-    await supabase.from('unit_allocations').delete().eq('unit_id', unitId);
+    console.error('Error deleting remainder rule:', error);
+    return { success: false, message: `Failed to delete rule: ${error.message}` };
   }
 
   revalidatePath('/dashboard');
   revalidatePath('/settings');
 
-  return { success: true, message: 'Allocation mode updated.' };
+  return { success: true, message: 'Remainder rule deleted.' };
 }
 
 // ─── Update Sorting Order of Units ───

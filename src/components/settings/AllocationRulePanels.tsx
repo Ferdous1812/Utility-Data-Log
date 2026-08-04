@@ -1,87 +1,17 @@
 'use client';
 
 import React, { useMemo, useState } from 'react';
-import { Sigma, Minus, Plus, X, ChevronDown, Zap } from 'lucide-react';
-import type { AllocationMode, Meter } from '@/lib/types';
+import { Sigma, Minus, Plus, X, ChevronDown, Zap, Trash2, Save } from 'lucide-react';
+import type { Meter } from '@/lib/types';
 import { buildRemainderFormula } from '@/lib/allocationFormula';
-
-/* ────────────────────────────────────────────────────────────
-   Allocation Mode toggle
-   ──────────────────────────────────────────────────────────── */
-
-interface AllocationModeToggleProps {
-  mode: AllocationMode;
-  onChange: (mode: AllocationMode) => void;
-  disabled?: boolean;
-}
-
-export function AllocationModeToggle({ mode, onChange, disabled = false }: AllocationModeToggleProps) {
-  return (
-    <div className="flex flex-col gap-1.5">
-      <span className="text-[11px] font-semibold uppercase tracking-wider text-text-muted">
-        Allocation Mode
-      </span>
-      <div className="inline-flex w-full sm:w-auto rounded-[var(--radius-md)] border border-border bg-bg-primary p-1 gap-1">
-        <ModeButton
-          active={mode === 'direct'}
-          icon={<Zap size={13} strokeWidth={2.25} />}
-          label="Direct Assignment"
-          disabled={disabled}
-          onClick={() => onChange('direct')}
-        />
-        <ModeButton
-          active={mode === 'calculated_remainder'}
-          icon={<Sigma size={13} strokeWidth={2.25} />}
-          label="Calculated Remainder"
-          disabled={disabled}
-          onClick={() => onChange('calculated_remainder')}
-        />
-      </div>
-    </div>
-  );
-}
-
-function ModeButton({
-  active,
-  icon,
-  label,
-  onClick,
-  disabled,
-}: {
-  active: boolean;
-  icon: React.ReactNode;
-  label: string;
-  onClick: () => void;
-  disabled?: boolean;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      className={`
-        flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5
-        px-3 py-1.5 rounded-[var(--radius-sm)] text-xs font-semibold
-        transition-all duration-150 cursor-pointer whitespace-nowrap
-        disabled:opacity-50 disabled:cursor-not-allowed
-        ${
-          active
-            ? 'bg-accent text-white shadow-[inset_0_-2px_0_rgba(0,0,0,0.15)]'
-            : 'text-text-secondary hover:text-text-primary hover:bg-bg-surface-hover'
-        }
-      `}
-    >
-      {icon}
-      {label}
-    </button>
-  );
-}
 
 /* ────────────────────────────────────────────────────────────
    Calculated Remainder panel
    ──────────────────────────────────────────────────────────── */
 
 export interface RemainderRuleValue {
+  /** undefined = not yet saved to the database (a new, in-progress rule) */
+  id?: string;
   baseSourceMeterId: string | null;
   deductionMeterIds: string[];
   remainderSharePercent: number;
@@ -281,20 +211,98 @@ function clampPercent(value: number): number {
   return Math.min(100, Math.max(0, value));
 }
 
-/** Small unit-card badge used in the Major Units list to show the active mode at a glance. */
-export function AllocationModeBadge({ mode }: { mode: AllocationMode }) {
-  if (mode === 'calculated_remainder') {
+/* ────────────────────────────────────────────────────────────
+   Remainder Rule card — wraps CalculatedRemainderPanel with its
+   own Save / Delete controls so a unit can carry several rules,
+   each persisted independently.
+   ──────────────────────────────────────────────────────────── */
+
+interface RemainderRuleCardProps extends Omit<CalculatedRemainderPanelProps, 'unitId'> {
+  unitId: string;
+  index: number;
+  isDirty: boolean;
+  isSaving: boolean;
+  onSave: () => void;
+  onDelete: () => void;
+}
+
+export function RemainderRuleCard({
+  index,
+  isDirty,
+  isSaving,
+  onSave,
+  onDelete,
+  ...panelProps
+}: RemainderRuleCardProps) {
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="flex items-center justify-between">
+        <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-text-secondary">
+          <Sigma size={12} strokeWidth={2.5} className="text-accent" />
+          Rule {index + 1}
+          {isDirty && (
+            <span className="inline-flex items-center gap-1 text-[10px] font-medium uppercase tracking-wider text-warning ml-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-warning animate-pulse-glow" />
+              Unsaved
+            </span>
+          )}
+        </span>
+        <div className="flex items-center gap-1.5">
+          <button
+            type="button"
+            onClick={onDelete}
+            disabled={isSaving}
+            title="Delete this rule"
+            className="inline-flex items-center justify-center w-7 h-7 rounded-[var(--radius-sm)] text-text-muted hover:text-danger hover:bg-danger/10 transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+          >
+            <Trash2 size={13} />
+          </button>
+          <button
+            type="button"
+            onClick={onSave}
+            disabled={!isDirty || isSaving}
+            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-[var(--radius-sm)] text-xs font-semibold bg-accent text-white hover:bg-accent-dim transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+          >
+            <Save size={12} />
+            {isSaving ? 'Saving…' : 'Save'}
+          </button>
+        </div>
+      </div>
+      <CalculatedRemainderPanel {...panelProps} />
+    </div>
+  );
+}
+
+/** Small unit-card badge used in the Major Units list — shows how many
+ *  direct allocations and remainder rules a unit currently combines. */
+export function AllocationCompositionBadge({
+  directCount,
+  remainderCount,
+}: {
+  directCount: number;
+  remainderCount: number;
+}) {
+  if (directCount === 0 && remainderCount === 0) {
     return (
-      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-[var(--radius-sm)] text-[10px] font-semibold uppercase tracking-wider bg-accent/12 text-accent">
-        <Sigma size={9} strokeWidth={2.5} />
-        Remainder
+      <span className="inline-flex items-center px-1.5 py-0.5 rounded-[var(--radius-sm)] text-[10px] font-semibold uppercase tracking-wider bg-border/60 text-text-muted">
+        Unconfigured
       </span>
     );
   }
   return (
-    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-[var(--radius-sm)] text-[10px] font-semibold uppercase tracking-wider bg-border/60 text-text-secondary">
-      <Zap size={9} strokeWidth={2.5} />
-      Direct
+    <span className="inline-flex items-center gap-1">
+      {directCount > 0 && (
+        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-[var(--radius-sm)] text-[10px] font-semibold uppercase tracking-wider bg-border/60 text-text-secondary">
+          <Zap size={9} strokeWidth={2.5} />
+          {directCount}
+        </span>
+      )}
+      {remainderCount > 0 && (
+        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-[var(--radius-sm)] text-[10px] font-semibold uppercase tracking-wider bg-accent/12 text-accent">
+          <Sigma size={9} strokeWidth={2.5} />
+          {remainderCount}
+        </span>
+      )}
     </span>
   );
 }

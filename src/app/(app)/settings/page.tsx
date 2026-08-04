@@ -8,8 +8,9 @@ import {
   deleteUnit,
   updateUnitAllocations,
   updateUnitsOrder,
+  addUnitRemainderRule,
   updateUnitRemainderRule,
-  updateUnitAllocationMode,
+  deleteUnitRemainderRule,
 } from '@/lib/unitActions';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -18,12 +19,12 @@ import { MeterTypeBadge } from '@/components/ui/Badge';
 import { MeterForm } from '@/components/MeterForm';
 import { useToast } from '@/components/ui/Toast';
 import {
-  AllocationModeToggle,
-  CalculatedRemainderPanel,
-  AllocationModeBadge,
+  RemainderRuleCard,
+  AllocationCompositionBadge,
   type RemainderRuleValue,
 } from '@/components/settings/AllocationRulePanels';
-import type { Meter, Unit, UnitAllocation, UnitRemainderRule, MeterSection, AllocationMode } from '@/lib/types';
+import type { Meter, Unit, UnitAllocation, UnitRemainderRule, MeterSection } from '@/lib/types';
+import { Plus } from 'lucide-react';
 
 export default function SettingsPage() {
   const supabase = createClient();
@@ -62,12 +63,14 @@ export default function SettingsPage() {
   const [unitSaving, setUnitSaving] = useState(false);
   const [unitCreating, setUnitCreating] = useState(false);
   const [localAllocations, setLocalAllocations] = useState<Record<string, string>>({});
-  const [localMode, setLocalMode] = useState<AllocationMode>('direct');
-  const [localRemainderRule, setLocalRemainderRule] = useState<RemainderRuleValue>({
-    baseSourceMeterId: null,
-    deductionMeterIds: [],
-    remainderSharePercent: 100,
-  });
+  // Each rule carries a stable localKey (separate from its DB id, which
+  // only exists once the rule has been saved) so React keys and dirty/
+  // saving tracking stay correct across add/save/delete.
+  const [localRemainderRules, setLocalRemainderRules] = useState<
+    (RemainderRuleValue & { localKey: string })[]
+  >([]);
+  const [dirtyRuleKeys, setDirtyRuleKeys] = useState<Set<string>>(new Set());
+  const [savingRuleKey, setSavingRuleKey] = useState<string | null>(null);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -110,24 +113,25 @@ export default function SettingsPage() {
     setLocalAllocations(mapping);
   }, [selectedUnitId, allocations]);
 
-  // Load allocation mode + remainder rule for selected unit into local state
+  // Load every remainder rule for the selected unit into local state
   useEffect(() => {
     if (!selectedUnitId) {
-      setLocalMode('direct');
-      setLocalRemainderRule({ baseSourceMeterId: null, deductionMeterIds: [], remainderSharePercent: 100 });
+      setLocalRemainderRules([]);
+      setDirtyRuleKeys(new Set());
       return;
     }
-    const unit = units.find((u) => u.id === selectedUnitId);
-    const mode: AllocationMode = unit?.allocation_mode === 'calculated_remainder' ? 'calculated_remainder' : 'direct';
-    setLocalMode(mode);
-
-    const rule = remainderRules.find((r) => r.unit_id === selectedUnitId);
-    setLocalRemainderRule({
-      baseSourceMeterId: rule?.base_source_meter_id ?? null,
-      deductionMeterIds: rule?.deduction_meter_ids ?? [],
-      remainderSharePercent: rule ? Number(rule.remainder_share_percent) : 100,
-    });
-  }, [selectedUnitId, units, remainderRules]);
+    const rules = remainderRules.filter((r) => r.unit_id === selectedUnitId);
+    setLocalRemainderRules(
+      rules.map((r) => ({
+        id: r.id,
+        localKey: r.id,
+        baseSourceMeterId: r.base_source_meter_id,
+        deductionMeterIds: r.deduction_meter_ids ?? [],
+        remainderSharePercent: Number(r.remainder_share_percent),
+      }))
+    );
+    setDirtyRuleKeys(new Set());
+  }, [selectedUnitId, remainderRules]);
 
   const handleSort = (field: SortField) => {
     if (sortField === field) {
@@ -698,48 +702,85 @@ export default function SettingsPage() {
     setUnitSaving(false);
   };
 
-  const handleSaveRemainderRule = async () => {
-    if (!selectedUnitId) return;
+  function handleAddRemainderRule() {
+    const localKey = `new-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    setLocalRemainderRules((prev) => [
+      ...prev,
+      { localKey, baseSourceMeterId: null, deductionMeterIds: [], remainderSharePercent: 100 },
+    ]);
+    setDirtyRuleKeys((prev) => new Set(prev).add(localKey));
+  }
 
-    if (!localRemainderRule.baseSourceMeterId) {
+  function updateLocalRule(localKey: string, patch: Partial<RemainderRuleValue>) {
+    setLocalRemainderRules((prev) =>
+      prev.map((r) => (r.localKey === localKey ? { ...r, ...patch } : r))
+    );
+    setDirtyRuleKeys((prev) => new Set(prev).add(localKey));
+  }
+
+  async function handleSaveRemainderRule(localKey: string) {
+    const rule = localRemainderRules.find((r) => r.localKey === localKey);
+    if (!rule || !selectedUnitId) return;
+
+    if (!rule.baseSourceMeterId) {
       addToast('error', 'Select a Base Source meter first.');
       return;
     }
-
-    const pct = localRemainderRule.remainderSharePercent;
+    const pct = rule.remainderSharePercent;
     if (Number.isNaN(pct) || pct < 0 || pct > 100) {
       addToast('error', 'Remainder Share % must be between 0 and 100.');
       return;
     }
 
-    setUnitSaving(true);
-    const res = await updateUnitRemainderRule(selectedUnitId, {
-      base_source_meter_id: localRemainderRule.baseSourceMeterId,
-      deduction_meter_ids: localRemainderRule.deductionMeterIds,
+    setSavingRuleKey(localKey);
+    const payload = {
+      base_source_meter_id: rule.baseSourceMeterId,
+      deduction_meter_ids: rule.deductionMeterIds,
       remainder_share_percent: pct,
-    });
+    };
+    const res = rule.id
+      ? await updateUnitRemainderRule(rule.id, payload)
+      : await addUnitRemainderRule(selectedUnitId, payload);
+
+    if (res.success) {
+      addToast('success', res.message);
+      setDirtyRuleKeys((prev) => {
+        const next = new Set(prev);
+        next.delete(localKey);
+        return next;
+      });
+      fetchData();
+    } else {
+      addToast('error', res.message);
+    }
+    setSavingRuleKey(null);
+  }
+
+  async function handleDeleteRemainderRule(localKey: string) {
+    const rule = localRemainderRules.find((r) => r.localKey === localKey);
+    if (!rule) return;
+
+    // Never-saved rule — just drop it locally, no server call needed.
+    if (!rule.id) {
+      setLocalRemainderRules((prev) => prev.filter((r) => r.localKey !== localKey));
+      setDirtyRuleKeys((prev) => {
+        const next = new Set(prev);
+        next.delete(localKey);
+        return next;
+      });
+      return;
+    }
+
+    setSavingRuleKey(localKey);
+    const res = await deleteUnitRemainderRule(rule.id);
     if (res.success) {
       addToast('success', res.message);
       fetchData();
     } else {
       addToast('error', res.message);
     }
-    setUnitSaving(false);
-  };
-
-  const handleModeChange = async (mode: AllocationMode) => {
-    setLocalMode(mode);
-    // Mode is only persisted for real once the operator hits Save on the
-    // relevant panel — but if the unit has no rows at all yet in either
-    // engine, flip the flag right away so a bare Save-less mode choice
-    // still sticks (e.g. operator picks a mode, then leaves the page).
-    if (!selectedUnitId) return;
-    const hasDirectRows = allocations.some((a) => a.unit_id === selectedUnitId);
-    const hasRemainderRow = remainderRules.some((r) => r.unit_id === selectedUnitId);
-    if (!hasDirectRows && !hasRemainderRow) {
-      await updateUnitAllocationMode(selectedUnitId, mode);
-    }
-  };
+    setSavingRuleKey(null);
+  }
 
   const selectedUnit = units.find((u) => u.id === selectedUnitId);
 
@@ -749,13 +790,11 @@ export default function SettingsPage() {
     [meters]
   );
 
-  const remainderDeductionCandidates = useMemo(() => {
-    if (!localRemainderRule.baseSourceMeterId) return [];
-    const descendantIds = new Set(getDescendantIds(localRemainderRule.baseSourceMeterId));
-    return meters.filter(
-      (m) => descendantIds.has(m.id) && !localRemainderRule.deductionMeterIds.includes(m.id)
-    );
-  }, [localRemainderRule.baseSourceMeterId, localRemainderRule.deductionMeterIds, meters, getDescendantIds]);
+  function deductionCandidatesFor(rule: RemainderRuleValue): Meter[] {
+    if (!rule.baseSourceMeterId) return [];
+    const descendantIds = new Set(getDescendantIds(rule.baseSourceMeterId));
+    return meters.filter((m) => descendantIds.has(m.id) && !rule.deductionMeterIds.includes(m.id));
+  }
 
   return (
     <div className="max-w-6xl mx-auto space-y-6">
@@ -1199,8 +1238,9 @@ export default function SettingsPage() {
                     >
                       <div className="flex items-center gap-2 min-w-0">
                         <span className="text-sm truncate">{unit.name}</span>
-                        <AllocationModeBadge
-                          mode={unit.allocation_mode === 'calculated_remainder' ? 'calculated_remainder' : 'direct'}
+                        <AllocationCompositionBadge
+                          directCount={allocations.filter((a) => a.unit_id === unit.id).length}
+                          remainderCount={remainderRules.filter((r) => r.unit_id === unit.id).length}
                         />
                       </div>
                       <div className="flex items-center gap-1.5">
@@ -1256,49 +1296,23 @@ export default function SettingsPage() {
             <Card className="p-0 overflow-hidden">
               <div className="p-4 border-b border-border bg-bg-elevated flex items-start sm:items-center justify-between flex-wrap gap-3">
                 <div className="min-w-0">
-                  <h2 className="text-lg font-semibold text-text-primary">
-                    {localMode === 'calculated_remainder' ? 'Calculated Remainder Rule' : 'Meter Allocation Matrix'}
-                  </h2>
+                  <h2 className="text-lg font-semibold text-text-primary">Meter Allocation Matrix</h2>
                   <p className="text-xs text-text-secondary mt-0.5">
                     {!selectedUnit
                       ? 'Select a Major Unit from the left to configure allocations'
-                      : localMode === 'calculated_remainder'
-                      ? `Define ( Base Source − Deductions ) × Share % for "${selectedUnit.name}"`
-                      : `Define what percentage of each outgoing meter belongs to "${selectedUnit.name}"`}
+                      : `Define what percentage of each directly-metered outgoing meter belongs to "${selectedUnit.name}"`}
                   </p>
                 </div>
                 {selectedUnitId && (
-                  <Button
-                    variant="success"
-                    size="sm"
-                    loading={unitSaving}
-                    onClick={localMode === 'calculated_remainder' ? handleSaveRemainderRule : handleSaveAllocations}
-                  >
+                  <Button variant="success" size="sm" loading={unitSaving} onClick={handleSaveAllocations}>
                     Save Changes
                   </Button>
                 )}
               </div>
 
-              {selectedUnitId && (
-                <div className="px-4 pt-4">
-                  <AllocationModeToggle mode={localMode} onChange={handleModeChange} disabled={unitSaving} />
-                </div>
-              )}
-
               {!selectedUnitId ? (
                 <div className="text-center py-16 text-text-muted">
                   <p className="text-sm">Please select or add a unit first.</p>
-                </div>
-              ) : localMode === 'calculated_remainder' ? (
-                <div className="p-4">
-                  <CalculatedRemainderPanel
-                    unitId={selectedUnitId}
-                    baseSourceOptions={remainderBaseSourceOptions}
-                    deductionCandidates={remainderDeductionCandidates}
-                    allMeters={meters}
-                    value={localRemainderRule}
-                    onChange={(patch) => setLocalRemainderRule((prev) => ({ ...prev, ...patch }))}
-                  />
                 </div>
               ) : outgoingMetersOnly.length === 0 ? (
                 <div className="text-center py-16 text-text-muted">
@@ -1376,6 +1390,53 @@ export default function SettingsPage() {
                 </div>
               )}
             </Card>
+
+            {/* Calculated Remainder Rules — combine with the Direct Assignment
+                matrix above; a unit's total is the sum of both engines. */}
+            {selectedUnitId && (
+              <Card className="p-0 overflow-hidden mt-4">
+                <div className="p-4 border-b border-border bg-bg-elevated flex items-start sm:items-center justify-between flex-wrap gap-3">
+                  <div className="min-w-0">
+                    <h2 className="text-lg font-semibold text-text-primary">Calculated Remainder Rules</h2>
+                    <p className="text-xs text-text-secondary mt-0.5">
+                      {selectedUnit
+                        ? `For members of "${selectedUnit.name}" that share an unmetered feed — ( Base Source − Deductions ) × Share %`
+                        : 'Define ( Base Source − Deductions ) × Share % for shared, unmetered feeds'}
+                    </p>
+                  </div>
+                  <Button variant="outline" size="sm" onClick={handleAddRemainderRule}>
+                    <Plus size={13} className="mr-1" />
+                    Add Rule
+                  </Button>
+                </div>
+
+                <div className="p-4 flex flex-col gap-4">
+                  {localRemainderRules.length === 0 ? (
+                    <p className="text-sm text-text-muted text-center py-6">
+                      No remainder rules yet — add one for warehouses (or other members) that share a feed
+                      without their own meter.
+                    </p>
+                  ) : (
+                    localRemainderRules.map((rule, idx) => (
+                      <RemainderRuleCard
+                        key={rule.localKey}
+                        unitId={selectedUnitId}
+                        index={idx}
+                        baseSourceOptions={remainderBaseSourceOptions}
+                        deductionCandidates={deductionCandidatesFor(rule)}
+                        allMeters={meters}
+                        value={rule}
+                        onChange={(patch) => updateLocalRule(rule.localKey, patch)}
+                        isDirty={dirtyRuleKeys.has(rule.localKey)}
+                        isSaving={savingRuleKey === rule.localKey}
+                        onSave={() => handleSaveRemainderRule(rule.localKey)}
+                        onDelete={() => handleDeleteRemainderRule(rule.localKey)}
+                      />
+                    ))
+                  )}
+                </div>
+              </Card>
+            )}
           </div>
         </div>
       )}

@@ -91,6 +91,7 @@ export interface UnitAllocation {
 }
 
 export interface UnitRemainderRule {
+  id: string;
   unit_id: string;
   base_source_meter_id: string;
   deduction_meter_ids: string[];
