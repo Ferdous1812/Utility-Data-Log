@@ -9,8 +9,9 @@ import {
   type MonthlyComparisonRow,
 } from '@/components/charts/MonthlyComparisonChart';
 import { colorAt } from '@/lib/chartColors';
+import { computeUnitConsumption } from '@/lib/unitConsumption';
 import { format, subMonths, endOfMonth, subDays, addDays } from 'date-fns';
-import type { Meter, MeterSection, Unit, UnitAllocation } from '@/lib/types';
+import type { Meter, MeterSection, Unit, UnitAllocation, UnitRemainderRule } from '@/lib/types';
 
 type ComparisonRange = 1 | 3 | 6 | 12;
 
@@ -72,6 +73,7 @@ export default function DashboardPage() {
   const [sections, setSections] = useState<MeterSection[]>([]);
   const [units, setUnits] = useState<Unit[]>([]);
   const [allocations, setAllocations] = useState<UnitAllocation[]>([]);
+  const [remainderRules, setRemainderRules] = useState<UnitRemainderRule[]>([]);
   const [readingsByMeter, setReadingsByMeter] = useState<Map<string, ReadingLite[]>>(new Map());
   const [loading, setLoading] = useState(true);
 
@@ -107,7 +109,7 @@ export default function DashboardPage() {
   const fetchData = useCallback(async () => {
     setLoading(true);
 
-    const [metersRes, sectionsRes, unitsRes, allocRes] = await Promise.all([
+    const [metersRes, sectionsRes, unitsRes, allocRes, remainderRes] = await Promise.all([
       supabase
         .from('meters')
         .select('*')
@@ -118,6 +120,7 @@ export default function DashboardPage() {
       supabase.from('meter_sections').select('*').order('sort_order', { ascending: true }),
       supabase.from('units').select('*').order('sort_order', { ascending: true }),
       supabase.from('unit_allocations').select('*'),
+      supabase.from('unit_remainder_rules').select('*'),
     ]);
 
     const fetchedMeters = (metersRes.data || []) as Meter[];
@@ -125,6 +128,7 @@ export default function DashboardPage() {
     setSections((sectionsRes.data || []) as MeterSection[]);
     setUnits((unitsRes.data || []) as Unit[]);
     setAllocations((allocRes.data || []) as UnitAllocation[]);
+    setRemainderRules((remainderRes.data || []) as UnitRemainderRule[]);
 
     if (fetchedMeters.length === 0 || boundaries.length === 0) {
       setReadingsByMeter(new Map());
@@ -294,15 +298,10 @@ export default function DashboardPage() {
   // ─── Unit-wise Consumption (reference month) ───
   const unitBreakdown = useMemo(() => {
     return units.map((u, i) => {
-      const uAllocs = allocations.filter((a) => a.unit_id === u.id);
-      let consumption = 0;
-      uAllocs.forEach((a) => {
-        const v = meterMonthlyConsumption.get(a.meter_id)?.[refIdx] || 0;
-        consumption += v * (Number(a.percentage) / 100);
-      });
+      const consumption = computeUnitConsumption(u, refIdx, allocations, remainderRules, meterMonthlyConsumption);
       return { id: u.id, name: u.name, consumption, color: colorAt(i) };
     });
-  }, [units, allocations, meterMonthlyConsumption, refIdx]);
+  }, [units, allocations, remainderRules, meterMonthlyConsumption, refIdx]);
 
   // ─── Monthly Comparison Chart data (Units) ───
   // One row per Major Unit; each row carries its own base color plus a
@@ -312,17 +311,12 @@ export default function DashboardPage() {
     return units.map((u, i) => {
       const values: Record<string, number> = {};
       monthsList.forEach((m, idx) => {
-        const uAllocs = allocations.filter((a) => a.unit_id === u.id);
-        let val = 0;
-        uAllocs.forEach((a) => {
-          const v = meterMonthlyConsumption.get(a.meter_id)?.[idx] || 0;
-          val += v * (Number(a.percentage) / 100);
-        });
+        const val = computeUnitConsumption(u, idx, allocations, remainderRules, meterMonthlyConsumption);
         values[m.key] = Math.round(val * 10) / 10;
       });
       return { id: u.id, name: u.name, color: colorAt(i), values };
     });
-  }, [units, allocations, meterMonthlyConsumption, monthsList]);
+  }, [units, allocations, remainderRules, meterMonthlyConsumption, monthsList]);
 
   // ─── Meter-wise Consumption charts (multi-month rows, KW meters only) ───
   // Same shape as the Units chart above: one row per meter, with a value per

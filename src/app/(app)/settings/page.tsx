@@ -3,14 +3,27 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { addMeter, updateMeter, deleteMeter, updateMetersOrder, addMeterSection, deleteMeterSection } from '@/lib/actions';
-import { addUnit, deleteUnit, updateUnitAllocations, updateUnitsOrder } from '@/lib/unitActions';
+import {
+  addUnit,
+  deleteUnit,
+  updateUnitAllocations,
+  updateUnitsOrder,
+  updateUnitRemainderRule,
+  updateUnitAllocationMode,
+} from '@/lib/unitActions';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { MeterTypeBadge } from '@/components/ui/Badge';
 import { MeterForm } from '@/components/MeterForm';
 import { useToast } from '@/components/ui/Toast';
-import type { Meter, Unit, UnitAllocation, MeterSection } from '@/lib/types';
+import {
+  AllocationModeToggle,
+  CalculatedRemainderPanel,
+  AllocationModeBadge,
+  type RemainderRuleValue,
+} from '@/components/settings/AllocationRulePanels';
+import type { Meter, Unit, UnitAllocation, UnitRemainderRule, MeterSection, AllocationMode } from '@/lib/types';
 
 export default function SettingsPage() {
   const supabase = createClient();
@@ -23,6 +36,7 @@ export default function SettingsPage() {
   const [sections, setSections] = useState<MeterSection[]>([]);
   const [units, setUnits] = useState<Unit[]>([]);
   const [allocations, setAllocations] = useState<UnitAllocation[]>([]);
+  const [remainderRules, setRemainderRules] = useState<UnitRemainderRule[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Meters Tab State
@@ -48,14 +62,21 @@ export default function SettingsPage() {
   const [unitSaving, setUnitSaving] = useState(false);
   const [unitCreating, setUnitCreating] = useState(false);
   const [localAllocations, setLocalAllocations] = useState<Record<string, string>>({});
+  const [localMode, setLocalMode] = useState<AllocationMode>('direct');
+  const [localRemainderRule, setLocalRemainderRule] = useState<RemainderRuleValue>({
+    baseSourceMeterId: null,
+    deductionMeterIds: [],
+    remainderSharePercent: 100,
+  });
 
   const fetchData = useCallback(async () => {
     setLoading(true);
-    const [unitsRes, metersRes, allocationsRes, sectionsRes] = await Promise.all([
+    const [unitsRes, metersRes, allocationsRes, sectionsRes, remainderRulesRes] = await Promise.all([
       supabase.from('units').select('*').order('sort_order', { ascending: true }),
       supabase.from('meters').select('*').eq('is_active', true).order('sort_order', { ascending: true }).order('name'),
       supabase.from('unit_allocations').select('*'),
       supabase.from('meter_sections').select('*').order('sort_order', { ascending: true }),
+      supabase.from('unit_remainder_rules').select('*'),
     ]);
 
     const fetchedUnits = (unitsRes.data || []) as Unit[];
@@ -63,6 +84,7 @@ export default function SettingsPage() {
     setMeters((metersRes.data || []) as Meter[]);
     setAllocations((allocationsRes.data || []) as UnitAllocation[]);
     setSections((sectionsRes.data || []) as MeterSection[]);
+    setRemainderRules((remainderRulesRes.data || []) as UnitRemainderRule[]);
 
     if (fetchedUnits.length > 0 && !selectedUnitId) {
       setSelectedUnitId(fetchedUnits[0].id);
@@ -87,6 +109,25 @@ export default function SettingsPage() {
     });
     setLocalAllocations(mapping);
   }, [selectedUnitId, allocations]);
+
+  // Load allocation mode + remainder rule for selected unit into local state
+  useEffect(() => {
+    if (!selectedUnitId) {
+      setLocalMode('direct');
+      setLocalRemainderRule({ baseSourceMeterId: null, deductionMeterIds: [], remainderSharePercent: 100 });
+      return;
+    }
+    const unit = units.find((u) => u.id === selectedUnitId);
+    const mode: AllocationMode = unit?.allocation_mode === 'calculated_remainder' ? 'calculated_remainder' : 'direct';
+    setLocalMode(mode);
+
+    const rule = remainderRules.find((r) => r.unit_id === selectedUnitId);
+    setLocalRemainderRule({
+      baseSourceMeterId: rule?.base_source_meter_id ?? null,
+      deductionMeterIds: rule?.deduction_meter_ids ?? [],
+      remainderSharePercent: rule ? Number(rule.remainder_share_percent) : 100,
+    });
+  }, [selectedUnitId, units, remainderRules]);
 
   const handleSort = (field: SortField) => {
     if (sortField === field) {
@@ -657,7 +698,64 @@ export default function SettingsPage() {
     setUnitSaving(false);
   };
 
+  const handleSaveRemainderRule = async () => {
+    if (!selectedUnitId) return;
+
+    if (!localRemainderRule.baseSourceMeterId) {
+      addToast('error', 'Select a Base Source meter first.');
+      return;
+    }
+
+    const pct = localRemainderRule.remainderSharePercent;
+    if (Number.isNaN(pct) || pct < 0 || pct > 100) {
+      addToast('error', 'Remainder Share % must be between 0 and 100.');
+      return;
+    }
+
+    setUnitSaving(true);
+    const res = await updateUnitRemainderRule(selectedUnitId, {
+      base_source_meter_id: localRemainderRule.baseSourceMeterId,
+      deduction_meter_ids: localRemainderRule.deductionMeterIds,
+      remainder_share_percent: pct,
+    });
+    if (res.success) {
+      addToast('success', res.message);
+      fetchData();
+    } else {
+      addToast('error', res.message);
+    }
+    setUnitSaving(false);
+  };
+
+  const handleModeChange = async (mode: AllocationMode) => {
+    setLocalMode(mode);
+    // Mode is only persisted for real once the operator hits Save on the
+    // relevant panel — but if the unit has no rows at all yet in either
+    // engine, flip the flag right away so a bare Save-less mode choice
+    // still sticks (e.g. operator picks a mode, then leaves the page).
+    if (!selectedUnitId) return;
+    const hasDirectRows = allocations.some((a) => a.unit_id === selectedUnitId);
+    const hasRemainderRow = remainderRules.some((r) => r.unit_id === selectedUnitId);
+    if (!hasDirectRows && !hasRemainderRow) {
+      await updateUnitAllocationMode(selectedUnitId, mode);
+    }
+  };
+
   const selectedUnit = units.find((u) => u.id === selectedUnitId);
+
+  // ─── Calculated Remainder: candidate meter pools ───
+  const remainderBaseSourceOptions = useMemo(
+    () => meters.filter((m) => !m.parent_meter_id),
+    [meters]
+  );
+
+  const remainderDeductionCandidates = useMemo(() => {
+    if (!localRemainderRule.baseSourceMeterId) return [];
+    const descendantIds = new Set(getDescendantIds(localRemainderRule.baseSourceMeterId));
+    return meters.filter(
+      (m) => descendantIds.has(m.id) && !localRemainderRule.deductionMeterIds.includes(m.id)
+    );
+  }, [localRemainderRule.baseSourceMeterId, localRemainderRule.deductionMeterIds, meters, getDescendantIds]);
 
   return (
     <div className="max-w-6xl mx-auto space-y-6">
@@ -1099,7 +1197,12 @@ export default function SettingsPage() {
                           : 'hover:bg-bg-surface-hover text-text-secondary border border-transparent'
                       }`}
                     >
-                      <span className="text-sm">{unit.name}</span>
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="text-sm truncate">{unit.name}</span>
+                        <AllocationModeBadge
+                          mode={unit.allocation_mode === 'calculated_remainder' ? 'calculated_remainder' : 'direct'}
+                        />
+                      </div>
                       <div className="flex items-center gap-1.5">
                         <div className="flex items-center gap-0.5">
                           <button
@@ -1153,30 +1256,56 @@ export default function SettingsPage() {
             <Card className="p-0 overflow-hidden">
               <div className="p-4 border-b border-border bg-bg-elevated flex items-start sm:items-center justify-between flex-wrap gap-3">
                 <div className="min-w-0">
-                  <h2 className="text-lg font-semibold text-text-primary">Meter Allocation Matrix</h2>
+                  <h2 className="text-lg font-semibold text-text-primary">
+                    {localMode === 'calculated_remainder' ? 'Calculated Remainder Rule' : 'Meter Allocation Matrix'}
+                  </h2>
                   <p className="text-xs text-text-secondary mt-0.5">
-                    {selectedUnit
-                      ? `Define what percentage of each outgoing meter belongs to "${selectedUnit.name}"`
-                      : 'Select a Major Unit from the left to configure allocations'}
+                    {!selectedUnit
+                      ? 'Select a Major Unit from the left to configure allocations'
+                      : localMode === 'calculated_remainder'
+                      ? `Define ( Base Source − Deductions ) × Share % for "${selectedUnit.name}"`
+                      : `Define what percentage of each outgoing meter belongs to "${selectedUnit.name}"`}
                   </p>
                 </div>
                 {selectedUnitId && (
-                  <Button variant="success" size="sm" loading={unitSaving} onClick={handleSaveAllocations}>
+                  <Button
+                    variant="success"
+                    size="sm"
+                    loading={unitSaving}
+                    onClick={localMode === 'calculated_remainder' ? handleSaveRemainderRule : handleSaveAllocations}
+                  >
                     Save Changes
                   </Button>
                 )}
               </div>
 
+              {selectedUnitId && (
+                <div className="px-4 pt-4">
+                  <AllocationModeToggle mode={localMode} onChange={handleModeChange} disabled={unitSaving} />
+                </div>
+              )}
+
               {!selectedUnitId ? (
                 <div className="text-center py-16 text-text-muted">
                   <p className="text-sm">Please select or add a unit first.</p>
+                </div>
+              ) : localMode === 'calculated_remainder' ? (
+                <div className="p-4">
+                  <CalculatedRemainderPanel
+                    unitId={selectedUnitId}
+                    baseSourceOptions={remainderBaseSourceOptions}
+                    deductionCandidates={remainderDeductionCandidates}
+                    allMeters={meters}
+                    value={localRemainderRule}
+                    onChange={(patch) => setLocalRemainderRule((prev) => ({ ...prev, ...patch }))}
+                  />
                 </div>
               ) : outgoingMetersOnly.length === 0 ? (
                 <div className="text-center py-16 text-text-muted">
                   <p className="text-sm">No active outgoing meters configured.</p>
                 </div>
               ) : (
-                <div className="max-h-[60vh] overflow-auto">
+                <div className="max-h-[60vh] overflow-auto mt-4">
                   <table className="responsive-table table-sticky-col w-full text-sm">
                     <thead className="sticky top-0 z-10 bg-table-header">
                       <tr className="border-b border-border text-text-secondary font-semibold">

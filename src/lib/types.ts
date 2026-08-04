@@ -71,11 +71,14 @@ export interface MeterSection {
   created_at: string;
 }
 
+export type AllocationMode = 'direct' | 'calculated_remainder';
+
 export interface Unit {
   id: string;
   name: string;
   sort_order: number;
   created_at: string;
+  allocation_mode?: AllocationMode;
 }
 
 export interface UnitAllocation {
@@ -85,4 +88,12 @@ export interface UnitAllocation {
   percentage: number;
   created_at: string;
   meter?: Meter;
+}
+
+export interface UnitRemainderRule {
+  unit_id: string;
+  base_source_meter_id: string;
+  deduction_meter_ids: string[];
+  remainder_share_percent: number;
+  updated_at: string;
 }
