@@ -3,15 +3,13 @@
 import React, { useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { MultiSelect, type MultiSelectOption } from '@/components/ui/MultiSelect';
-import { Input } from '@/components/ui/Input';
-import { Button } from '@/components/ui/Button';
 import type { Meter, MeterSection } from '@/lib/types';
 
 interface HistoryFiltersProps {
   meters: Meter[];
   sections: MeterSection[];
+  activeSectionId?: string;
   currentMeterIds: string[];
-  currentSectionIds: string[];
   currentFrom?: string;
   currentTo?: string;
 }
@@ -29,8 +27,8 @@ const TYPE_LABELS: Record<string, string> = {
 export function HistoryFilters({
   meters,
   sections,
+  activeSectionId,
   currentMeterIds,
-  currentSectionIds,
   currentFrom,
   currentTo,
 }: HistoryFiltersProps) {
@@ -50,79 +48,95 @@ export function HistoryFilters({
   };
 
   const setMeterIds = (ids: string[]) => updateParams({ meters: ids.join(',') });
-  const setSectionIds = (ids: string[]) => updateParams({ sections: ids.join(',') });
   const setFrom = (v: string) => updateParams({ from: v });
   const setTo = (v: string) => updateParams({ to: v });
 
-  const clearFilters = () => router.push('/history');
+  const clearFilters = () => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete('meters');
+    params.delete('from');
+    params.delete('to');
+    router.push(`/history?${params.toString()}`);
+  };
 
-  const hasFilters =
-    currentMeterIds.length > 0 || currentSectionIds.length > 0 || currentFrom || currentTo;
+  const hasFilters = currentMeterIds.length > 0 || currentFrom || currentTo;
 
-  // Section-wise meter ordering — same sequence as Settings / Log Reading:
-  // walk sections in sort_order, list that section's meters (already sorted
-  // by sort_order/type/name), then a trailing "Uncategorized" group.
-  const meterOptions: MultiSelectOption[] = useMemo(() => {
-    const bySection: MultiSelectOption[] = [];
-    for (const sec of sections) {
-      for (const m of meters) {
-        if (m.section_id === sec.id) {
-          bySection.push({ value: m.id, label: m.name, group: sec.name });
-        }
-      }
+  // Filter meters to ONLY those belonging to the active section/tab
+  const tabMeters = useMemo(() => {
+    if (!activeSectionId) return meters;
+    if (activeSectionId === '__uncategorized__') {
+      return meters.filter((m) => !m.section_id);
     }
-    const uncategorized = meters
-      .filter((m) => !m.section_id)
-      .map((m) => ({ value: m.id, label: m.name, group: 'Uncategorized' }));
+    return meters.filter((m) => m.section_id === activeSectionId);
+  }, [meters, activeSectionId]);
 
-    return [...bySection, ...uncategorized];
-  }, [meters, sections]);
-
-  const sectionOptions: MultiSelectOption[] = useMemo(
-    () => sections.map((s) => ({ value: s.id, label: s.name })),
-    [sections]
-  );
+  const meterOptions: MultiSelectOption[] = useMemo(() => {
+    return tabMeters.map((m) => ({
+      value: m.id,
+      label: m.name,
+    }));
+  }, [tabMeters]);
 
   return (
-    <div className="flex flex-wrap items-end gap-3">
-      <div className="w-60">
+    <div className="flex flex-wrap items-center gap-2">
+      {/* Meter Filter — compact */}
+      <div className="w-48 sm:w-56">
         <MultiSelect
-          label="Section"
-          placeholder="All sections"
-          options={sectionOptions}
-          values={currentSectionIds}
-          onChange={setSectionIds}
-        />
-      </div>
-      <div className="w-64">
-        <MultiSelect
-          label="Meter"
           placeholder="All meters"
           options={meterOptions}
           values={currentMeterIds}
           onChange={setMeterIds}
+          compact
         />
       </div>
-      <div className="w-44">
-        <Input
-          label="From Date"
+
+      {/* Date From */}
+      <div className="relative group">
+        <label className="absolute -top-1.5 left-2 text-[8px] uppercase font-bold tracking-wider text-text-muted bg-bg-primary px-1 z-10 leading-none">
+          From
+        </label>
+        <input
           type="date"
           value={currentFrom || ''}
           onChange={(e) => setFrom(e.target.value)}
+          className="bg-bg-surface border border-border/80 rounded-[var(--radius-sm)] text-[11px] text-text-primary
+            pl-2 pr-1.5 py-1 w-[120px]
+            focus:outline-none focus:border-accent/60 focus:ring-1 focus:ring-accent/20
+            hover:border-accent/40 transition-all cursor-pointer"
         />
       </div>
-      <div className="w-44">
-        <Input
-          label="To Date"
+
+      {/* Date To */}
+      <div className="relative group">
+        <label className="absolute -top-1.5 left-2 text-[8px] uppercase font-bold tracking-wider text-text-muted bg-bg-primary px-1 z-10 leading-none">
+          To
+        </label>
+        <input
           type="date"
           value={currentTo || ''}
           onChange={(e) => setTo(e.target.value)}
+          className="bg-bg-surface border border-border/80 rounded-[var(--radius-sm)] text-[11px] text-text-primary
+            pl-2 pr-1.5 py-1 w-[120px]
+            focus:outline-none focus:border-accent/60 focus:ring-1 focus:ring-accent/20
+            hover:border-accent/40 transition-all cursor-pointer"
         />
       </div>
+
+      {/* Clear */}
       {hasFilters && (
-        <Button variant="ghost" size="sm" onClick={clearFilters}>
-          ✕ Clear
-        </Button>
+        <button
+          type="button"
+          onClick={clearFilters}
+          className="inline-flex items-center gap-1 px-2 py-1 text-[11px] font-medium rounded-[var(--radius-sm)]
+            text-text-muted hover:text-danger hover:bg-danger/10 transition-colors cursor-pointer select-none"
+          title="Clear all filters"
+        >
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18" />
+            <line x1="6" y1="6" x2="18" y2="18" />
+          </svg>
+          Clear
+        </button>
       )}
     </div>
   );

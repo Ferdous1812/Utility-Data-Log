@@ -4,14 +4,15 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { Card, StatCard } from '@/components/ui/Card';
 import { Select } from '@/components/ui/Select';
-import {
-  MonthlyComparisonChart,
-  type MonthlyComparisonRow,
-} from '@/components/charts/MonthlyComparisonChart';
+import { Tabs } from '@/components/ui/Tabs';
+import type { MonthlyComparisonRow } from '@/components/charts/MonthlyComparisonChart';
+import { FilterableChartCard } from '@/components/charts/FilterableMonthlyChart';
+import { computeEnergyDashboardStats } from '@/lib/calculations/energy';
+import type { EnergyMeter, EnergyMeterDevice, EnergyReadingLog } from '@/types/energy';
 import { colorAt } from '@/lib/chartColors';
-import { computeUnitConsumption } from '@/lib/unitConsumption';
-import { format, subMonths, endOfMonth, subDays, addDays } from 'date-fns';
-import type { Meter, MeterSection, Unit, UnitAllocation, UnitRemainderRule } from '@/lib/types';
+import { format, subMonths, endOfMonth, startOfMonth, subDays, addDays } from 'date-fns';
+import type { Meter, MeterSection } from '@/lib/types';
+import { useTierLabels, getEnergyGroupLabel, getGasGroupLabel, getHourGroupKey } from '@/lib/useTierLabels';
 
 type ComparisonRange = 1 | 3 | 6 | 12;
 
@@ -61,6 +62,7 @@ function findNearestReading(list: ReadingLite[] | undefined, targetDate: string)
 export default function DashboardPage() {
   const supabase = createClient();
   const now = useMemo(() => new Date(), []);
+  const tierLabels = useTierLabels();
 
   // Default reference month = the month before the current month.
   const defaultRef = useMemo(() => subMonths(now, 1), [now]);
@@ -71,11 +73,23 @@ export default function DashboardPage() {
 
   const [meters, setMeters] = useState<Meter[]>([]);
   const [sections, setSections] = useState<MeterSection[]>([]);
-  const [units, setUnits] = useState<Unit[]>([]);
-  const [allocations, setAllocations] = useState<UnitAllocation[]>([]);
-  const [remainderRules, setRemainderRules] = useState<UnitRemainderRule[]>([]);
   const [readingsByMeter, setReadingsByMeter] = useState<Map<string, ReadingLite[]>>(new Map());
+  // Readings per branch device of split (Peak / Off-Peak) energy meters
+  const [deviceReadings, setDeviceReadings] = useState<Map<string, ReadingLite[]>>(new Map());
+  const [energyStatsData, setEnergyStatsData] = useState<{
+    meters: EnergyMeter[];
+    devices: EnergyMeterDevice[];
+    logs: EnergyReadingLog[];
+    prevLogs: EnergyReadingLog[];
+  }>({ meters: [], devices: [], logs: [], prevLogs: [] });
+  const [gasMeterIds, setGasMeterIds] = useState<Set<string>>(new Set());
+  const [gasStatsData, setGasStatsData] = useState<{
+    meters: EnergyMeter[];
+    devices: EnergyMeterDevice[];
+    logs: EnergyReadingLog[];
+  }>({ meters: [], devices: [], logs: [] });
   const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState<'energy' | 'gas' | 'hour'>('energy');
 
   const yearOptions = useMemo(() => {
     const years: number[] = [];
@@ -109,7 +123,7 @@ export default function DashboardPage() {
   const fetchData = useCallback(async () => {
     setLoading(true);
 
-    const [metersRes, sectionsRes, unitsRes, allocRes, remainderRes] = await Promise.all([
+    const [metersRes, sectionsRes, hourMetersRes] = await Promise.all([
       supabase
         .from('meters')
         .select('*')
@@ -118,17 +132,128 @@ export default function DashboardPage() {
         .order('type')
         .order('name'),
       supabase.from('meter_sections').select('*').order('sort_order', { ascending: true }),
-      supabase.from('units').select('*').order('sort_order', { ascending: true }),
-      supabase.from('unit_allocations').select('*'),
-      supabase.from('unit_remainder_rules').select('*'),
+      supabase.from('hour_meters').select('id, equipment_group, category').eq('is_active', true),
     ]);
 
-    const fetchedMeters = (metersRes.data || []) as Meter[];
+    // Energy Meter page data source (same tables/logic as /energy-meters) for the top cards
+    const refMonthStart = startOfMonth(refDate);
+    const prevMonthStart = subMonths(refMonthStart, 1);
+    const monthRange = (d: Date) => ({
+      from: format(startOfMonth(d), 'yyyy-MM-dd'),
+      to: format(endOfMonth(d), 'yyyy-MM-dd'),
+    });
+    const refRange = monthRange(refMonthStart);
+    const prevRange = monthRange(prevMonthStart);
+
+    const [energyMetersRes, energyLogsRes, energyPrevLogsRes, gasMetersRes, gasLogsRes] = await Promise.all([
+      supabase
+        .from('energy_meters')
+        .select('*, devices:energy_meter_devices(*)')
+        .eq('is_active', true),
+      supabase
+        .from('energy_reading_logs')
+        .select('*')
+        .gte('reading_date', refRange.from)
+        .lte('reading_date', refRange.to)
+        .limit(2000),
+      supabase
+        .from('energy_reading_logs')
+        .select('*')
+        .gte('reading_date', prevRange.from)
+        .lte('reading_date', prevRange.to)
+        .limit(2000),
+      supabase
+        .from('gas_meters')
+        .select('*, devices:gas_meter_devices(*)')
+        .eq('is_active', true),
+      supabase
+        .from('gas_reading_logs')
+        .select('*, device:gas_meter_devices(id, meter_id)')
+        .gte('reading_date', refRange.from)
+        .lte('reading_date', refRange.to)
+        .limit(2000),
+    ]);
+
+    const energyMetersList = (energyMetersRes.data || []) as EnergyMeter[];
+    setEnergyStatsData({
+      meters: energyMetersList,
+      devices: energyMetersList.flatMap((m) => m.devices || []),
+      logs: (energyLogsRes.data || []) as EnergyReadingLog[],
+      prevLogs: (energyPrevLogsRes.data || []) as EnergyReadingLog[],
+    });
+    // Gas data: same sources/fallback as the Gas Meters page (gas_reading_logs,
+    // falling back to the readings table for meters with no gas logs this month).
+    const gasMetersList = ((gasMetersRes.data || []) as any[]).map((m) => {
+      const devs = m.devices || [];
+      return devs.length > 0
+        ? m
+        : {
+            ...m,
+            devices: [
+              {
+                id: m.id,
+                meter_id: m.id,
+                checkpoint_label: 'Primary Meter',
+                serial_number: '',
+                is_billing_primary: true,
+                sort_order: 0,
+                created_at: m.created_at,
+              },
+            ],
+          };
+    }) as EnergyMeter[];
+    const gasLogs = ((gasLogsRes.data || []) as any[]) as EnergyReadingLog[];
+
+    const gasMetersWithLogs = new Set(
+      gasLogs.map((l: any) => l.device?.meter_id).filter(Boolean)
+    );
+    const gasMissingIds = gasMetersList.map((m) => m.id).filter((id) => !gasMetersWithLogs.has(id));
+    if (gasMissingIds.length > 0) {
+      const { data: legacyGas } = await supabase
+        .from('readings')
+        .select('id, meter_id, reading_value, reading_date, usage, created_at, logged_by')
+        .in('meter_id', gasMissingIds)
+        .gte('reading_date', refRange.from)
+        .lte('reading_date', refRange.to);
+      const gmMap = new Map(gasMetersList.map((m) => [m.id, m]));
+      (legacyGas || []).forEach((lr: any) => {
+        const gm = gmMap.get(lr.meter_id);
+        const primary = gm?.devices?.find((d) => d.is_billing_primary) || gm?.devices?.[0];
+        gasLogs.push({
+          id: lr.id,
+          device_id: primary?.id || lr.meter_id,
+          reading_value: Number(lr.reading_value),
+          reading_date: lr.reading_date,
+          usage: lr.usage != null ? Number(lr.usage) : null,
+          operator_id: lr.logged_by,
+          created_at: lr.created_at,
+        } as EnergyReadingLog);
+      });
+    }
+
+    setGasStatsData({
+      meters: gasMetersList,
+      devices: gasMetersList.flatMap((m) => m.devices || []),
+      logs: gasLogs,
+    });
+    setGasMeterIds(new Set(gasMetersList.map((g) => g.id)));
+
+    const hourMap = new Map<string, { equipment_group?: string; category?: string }>();
+    (hourMetersRes.data || []).forEach((hm: any) => {
+      hourMap.set(hm.id, { equipment_group: hm.equipment_group, category: hm.category });
+    });
+
+    const fetchedMeters = ((metersRes.data || []) as any[]).map((m) => {
+      const hm = hourMap.get(m.id);
+      return {
+        ...m,
+        equipment_group: hm?.equipment_group,
+        category: hm?.category || m.category,
+      };
+    }) as Meter[];
+
     setMeters(fetchedMeters);
     setSections((sectionsRes.data || []) as MeterSection[]);
-    setUnits((unitsRes.data || []) as Unit[]);
-    setAllocations((allocRes.data || []) as UnitAllocation[]);
-    setRemainderRules((remainderRes.data || []) as UnitRemainderRule[]);
 
     if (fetchedMeters.length === 0 || boundaries.length === 0) {
       setReadingsByMeter(new Map());
@@ -161,13 +286,70 @@ export default function DashboardPage() {
       grouped.set(r.meter_id, arr);
     });
 
+    // Branch readings for split energy meters (Peak / Off-Peak)
+    const splitDeviceIds = energyMetersList
+      .filter((m) => m.reading_mode === 'split')
+      .flatMap((m) => (m.devices || []).map((d) => d.id));
+    const devGrouped = new Map<string, ReadingLite[]>();
+    if (splitDeviceIds.length > 0) {
+      const { data: devLogs } = await supabase
+        .from('energy_reading_logs')
+        .select('id, device_id, reading_value, reading_date, created_at')
+        .in('device_id', splitDeviceIds)
+        .gte('reading_date', windowStart)
+        .lte('reading_date', windowEnd)
+        .order('reading_date', { ascending: true })
+        .order('created_at', { ascending: true });
+      (devLogs || []).forEach((r: any) => {
+        const arr = devGrouped.get(r.device_id) || [];
+        arr.push({
+          id: r.id,
+          reading_value: Number(r.reading_value),
+          reading_date: r.reading_date,
+          created_at: r.created_at,
+        });
+        devGrouped.set(r.device_id, arr);
+      });
+    }
+    setDeviceReadings(devGrouped);
+
     setReadingsByMeter(grouped);
     setLoading(false);
-  }, [supabase, boundaries]);
+  }, [supabase, boundaries, refDate]);
 
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  // Split (Peak / Off-Peak) meters: per-branch monthly usage; meter total = sum of branches.
+  const splitMonthly = useMemo(() => {
+    const map = new Map<string, { total: number[]; branches: { id: string; label: string; values: number[] }[] }>();
+    energyStatsData.meters
+      .filter((m) => m.reading_mode === 'split')
+      .forEach((m) => {
+        const mf = Number(m.multiplication_factor) || 1;
+        const devs = [...(m.devices || [])].sort((a, b) => a.sort_order - b.sort_order);
+        const branches = devs.map((d) => {
+          const list = deviceReadings.get(d.id);
+          const values: number[] = [];
+          for (let i = 0; i < comparisonRange; i++) {
+            const prevReading = findNearestReading(list, boundaries[i]);
+            const currReading = findNearestReading(list, boundaries[i + 1]);
+            if (!prevReading || !currReading || prevReading.id === currReading.id) {
+              values.push(0);
+              continue;
+            }
+            values.push((currReading.reading_value - prevReading.reading_value) * mf);
+          }
+          return { id: d.id, label: d.checkpoint_label, values };
+        });
+        const total = Array.from({ length: comparisonRange }, (_, i) =>
+          branches.reduce((sum, b) => sum + (b.values[i] || 0), 0)
+        );
+        map.set(m.id, { total, branches });
+      });
+    return map;
+  }, [energyStatsData.meters, deviceReadings, boundaries, comparisonRange]);
 
   // Per-meter consumption for each month in the comparison range.
   const meterMonthlyConsumption = useMemo(() => {
@@ -187,8 +369,13 @@ export default function DashboardPage() {
       }
       map.set(m.id, values);
     });
+    // Split meters: total = sum of branches; branch ids are tracked for the graph filter
+    splitMonthly.forEach((v, meterId) => {
+      map.set(meterId, v.total);
+      v.branches.forEach((b) => map.set(b.id, b.values));
+    });
     return map;
-  }, [meters, readingsByMeter, boundaries, comparisonRange]);
+  }, [meters, readingsByMeter, boundaries, comparisonRange, splitMonthly]);
 
   const sectionMap = useMemo(() => new Map(sections.map((s) => [s.id, s])), [sections]);
 
@@ -249,74 +436,37 @@ export default function DashboardPage() {
     [kwMeters]
   );
 
-  // Named-meter lookups for the specific plant formulas below.
-  // Total Incoming    = REB Off-Peak (Main) + REB Peak (Main) + Gas Gen. + Diesel Gen.
-  // Outgoing (Main)   = REB (LT) reading only
-  // Outgoing (Sub)    = sum of all "Outgoing Main"-type meters
-  // Distribution Loss = (REB Off-Peak (Main) + REB Peak (Main)) - REB (LT)
-  const findMeterByName = useCallback(
-    (name: string) =>
-      meters.find((m) => m.name.trim().toLowerCase() === name.trim().toLowerCase()),
-    [meters]
+  // ─── Top cards: same logic as the Energy Meters page ───
+  const energyStats = useMemo(
+    () => computeEnergyDashboardStats(energyStatsData.meters, energyStatsData.devices, energyStatsData.logs),
+    [energyStatsData]
   );
-  const consumptionForName = useCallback(
-    (name: string, idx: number) => {
-      if (idx < 0) return 0;
-      const m = findMeterByName(name);
-      if (!m) return 0;
-      return meterMonthlyConsumption.get(m.id)?.[idx] || 0;
-    },
-    [findMeterByName, meterMonthlyConsumption]
+  const energyStatsPrev = useMemo(
+    () => computeEnergyDashboardStats(energyStatsData.meters, energyStatsData.devices, energyStatsData.prevLogs),
+    [energyStatsData]
   );
 
-  const NAMED_INCOMING_METERS = ['REB Off-Peak (Main)', 'REB Peak (Main)', 'Gas Gen.', 'Diesel Gen.'];
-  const namedIncomingMeters = useMemo(
-    () => NAMED_INCOMING_METERS.map(findMeterByName).filter((m): m is Meter => !!m),
-    [findMeterByName]
-  );
-  // Flags any configured meter name that doesn't match a real meter, so a typo/rename
-  // in Settings surfaces as a visible warning instead of silently showing 0.
-  const missingNamedMeters = useMemo(
-    () =>
-      [...NAMED_INCOMING_METERS, 'REB (LT)'].filter((name) => !findMeterByName(name)),
-    [findMeterByName]
-  );
-
-  const totalIncoming = sumFor(namedIncomingMeters, refIdx);
-  const totalIncomingPrev = sumFor(namedIncomingMeters, prevIdx);
+  const totalIncoming = energyStats.totalIncoming;
+  const totalIncomingPrev = energyStatsPrev.totalIncoming;
   const percentChange =
     totalIncomingPrev > 0 ? ((totalIncoming - totalIncomingPrev) / totalIncomingPrev) * 100 : 0;
 
-  const rebOffPeak = consumptionForName('REB Off-Peak (Main)', refIdx);
-  const rebPeak = consumptionForName('REB Peak (Main)', refIdx);
-  const rebLT = consumptionForName('REB (LT)', refIdx);
+  const totalOutgoingMain = energyStats.totalOutgoingMain;
+  const totalOutgoingMainPrev = energyStatsPrev.totalOutgoingMain;
+  const outgoingMainChange =
+    totalOutgoingMainPrev > 0 ? ((totalOutgoingMain - totalOutgoingMainPrev) / totalOutgoingMainPrev) * 100 : 0;
 
-  const totalOutgoingMain = rebLT; // Outgoing Power (Main) card = REB (LT) reading only
-  const totalOutgoingSub = sumFor(outgoingMainMeters, refIdx); // Outgoing Power (Sub) card = sum of all Outgoing Main-type meters
-  const difference = (rebOffPeak + rebPeak) - rebLT; // Distribution Loss / Variance
+  // Outgoing Sub / Sub-Sub cards are unchanged (dashboard readings-based)
+  const totalOutgoingSub = sumFor(outgoingSubMeters, refIdx);
+  const totalOutgoingSubPrev = sumFor(outgoingSubMeters, prevIdx);
+  const outgoingSubChange =
+    totalOutgoingSubPrev > 0 ? ((totalOutgoingSub - totalOutgoingSubPrev) / totalOutgoingSubPrev) * 100 : 0;
 
-  // ─── Unit-wise Consumption (reference month) ───
-  const unitBreakdown = useMemo(() => {
-    return units.map((u, i) => {
-      const consumption = computeUnitConsumption(u, refIdx, allocations, remainderRules, meterMonthlyConsumption);
-      return { id: u.id, name: u.name, consumption, color: colorAt(i) };
-    });
-  }, [units, allocations, remainderRules, meterMonthlyConsumption, refIdx]);
+  const totalOutgoingSubSub = sumFor(outgoingSubSubMeters, refIdx);
 
-  // ─── Monthly Comparison Chart data (Units) ───
-  // One row per Major Unit; each row carries its own base color plus a
-  // month-keyed values map, so the chart can group each unit's months
-  // together and shade them from that unit's color.
-  const unitMonthlyRows: MonthlyComparisonRow[] = useMemo(() => {
-    return units.map((u, i) => {
-      const values: Record<string, number> = {};
-      monthsList.forEach((m, idx) => {
-        const val = computeUnitConsumption(u, idx, allocations, remainderRules, meterMonthlyConsumption);
-        values[m.key] = Math.round(val * 10) / 10;
-      });
-      return { id: u.id, name: u.name, color: colorAt(i), values };
-    });
-  }, [units, allocations, remainderRules, meterMonthlyConsumption, monthsList]);
+  const systemLoss = energyStats.systemLoss;
+  const systemLossPercent = energyStats.systemLossPercent;
+
 
   // ─── Meter-wise Consumption charts (multi-month rows, KW meters only) ───
   // Same shape as the Units chart above: one row per meter, with a value per
@@ -337,94 +487,146 @@ export default function DashboardPage() {
     [monthsList, meterMonthlyConsumption, lastMonthKey]
   );
 
-  const incomingMonthlyRows: MonthlyComparisonRow[] = useMemo(() => {
-    const REB_OFFPEAK = 'REB Off-Peak (Main)';
-    const REB_PEAK = 'REB Peak (Main)';
-    const isRebPair = (m: Meter) => {
-      const n = m.name.trim().toLowerCase();
-      return n === REB_OFFPEAK.toLowerCase() || n === REB_PEAK.toLowerCase();
-    };
+  // Adds Peak / Off-Peak rows (hidden by default, selectable in the filter) after each split meter
+  const withBranchRows = useCallback(
+    (rows: MonthlyComparisonRow[]): MonthlyComparisonRow[] =>
+      rows.flatMap((r) => {
+        const sm = splitMonthly.get(r.id);
+        if (!sm) return [r];
+        const branchRows: MonthlyComparisonRow[] = sm.branches.map((b) => {
+          const values: Record<string, number> = {};
+          monthsList.forEach((mo, idx) => {
+            values[mo.key] = Math.round((b.values[idx] || 0) * 10) / 10;
+          });
+          return { id: b.id, name: `${r.name} — ${b.label}`, color: r.color, values, defaultHidden: true };
+        });
+        return [r, ...branchRows];
+      }),
+    [splitMonthly, monthsList]
+  );
 
-    const others = incomingMeters.filter((m) => !isRebPair(m));
-    const otherRows = buildMonthlyRows(others, (_m, i) => colorAt(i + 1));
-
-    const offPeakMeter = findMeterByName(REB_OFFPEAK);
-    const peakMeter = findMeterByName(REB_PEAK);
-    let rebRow: MonthlyComparisonRow | null = null;
-    if (offPeakMeter || peakMeter) {
-      const values: Record<string, number> = {};
-      monthsList.forEach((mo, idx) => {
-        const offVal = offPeakMeter ? meterMonthlyConsumption.get(offPeakMeter.id)?.[idx] || 0 : 0;
-        const peakVal = peakMeter ? meterMonthlyConsumption.get(peakMeter.id)?.[idx] || 0 : 0;
-        values[mo.key] = Math.round((offVal + peakVal) * 10) / 10;
-      });
-      rebRow = { id: 'reb-main', name: 'REB (Main)', color: colorAt(0), values };
-    }
-
-    const combined = rebRow ? [rebRow, ...otherRows] : otherRows;
-    return combined.sort((a, b) => (b.values[lastMonthKey] || 0) - (a.values[lastMonthKey] || 0));
-  }, [incomingMeters, buildMonthlyRows, findMeterByName, meterMonthlyConsumption, monthsList, lastMonthKey]);
+  const incomingMonthlyRows = useMemo(
+    () => withBranchRows(buildMonthlyRows(incomingMeters, (_m, i) => colorAt(i))),
+    [buildMonthlyRows, incomingMeters, withBranchRows]
+  );
 
   const outgoingMainMonthlyRows = useMemo(
-    () => buildMonthlyRows(outgoingMainMeters, (_m, i) => colorAt(i)),
-    [buildMonthlyRows, outgoingMainMeters]
+    () => withBranchRows(buildMonthlyRows(outgoingMainMeters, (_m, i) => colorAt(i))),
+    [buildMonthlyRows, outgoingMainMeters, withBranchRows]
   );
   const outgoingSubMonthlyRows = useMemo(
-    () => buildMonthlyRows(outgoingSubMeters, (_m, i) => colorAt(i)),
-    [buildMonthlyRows, outgoingSubMeters]
+    () => withBranchRows(buildMonthlyRows(outgoingSubMeters, (_m, i) => colorAt(i))),
+    [buildMonthlyRows, outgoingSubMeters, withBranchRows]
   );
   const outgoingSubSubMonthlyRows = useMemo(
-    () => buildMonthlyRows(outgoingSubSubMeters, (_m, i) => colorAt(i)),
-    [buildMonthlyRows, outgoingSubSubMeters]
+    () => withBranchRows(buildMonthlyRows(outgoingSubSubMeters, (_m, i) => colorAt(i))),
+    [buildMonthlyRows, outgoingSubSubMeters, withBranchRows]
   );
 
-  // ─── Gas Meter & Hour Meter charts (Incoming vs Outgoing, multi-month rows) ───
-  const buildDirectionalMonthlyRows = useCallback(
+  // ─── Gas Meter & Hour Meter charts (multi-month rows) ───
+  // Gas tier comes from gas_meters.section (same as the Gas Meters page)
+  const gasSectionById = useMemo(
+    () => new Map(gasStatsData.meters.map((m) => [m.id, m.section as string])),
+    [gasStatsData.meters]
+  );
+
+  // Only meters that exist & are active on the Gas Meters page
+  const gasMeters = useMemo(
+    () => meters.filter((m) => isGasSection(m) && gasMeterIds.has(m.id)),
+    [meters, isGasSection, gasMeterIds]
+  );
+  const hourMeters = useMemo(() => meters.filter(isHourSection), [meters, isHourSection]);
+
+  const gasIncomingMeters = useMemo(
+    () => gasMeters.filter((m) => gasSectionById.get(m.id) === 'incoming'),
+    [gasMeters, gasSectionById]
+  );
+  const gasOutgoingMainMeters = useMemo(
+    () => gasMeters.filter((m) => gasSectionById.get(m.id) === 'outgoing_main'),
+    [gasMeters, gasSectionById]
+  );
+  const gasApplianceMeters = useMemo(
+    () => gasMeters.filter((m) => gasSectionById.get(m.id) === 'outgoing_sub'),
+    [gasMeters, gasSectionById]
+  );
+
+  // Gas cards: identical calculation to the Gas Meters page
+  const gasStats = useMemo(
+    () => computeEnergyDashboardStats(gasStatsData.meters, gasStatsData.devices, gasStatsData.logs),
+    [gasStatsData]
+  );
+  const totalGasIncomer = gasStats.totalIncoming;
+  const totalGasHeaders = gasStats.totalOutgoingMain;
+  const totalGasAppliances = gasStats.totalOutgoingSub;
+
+  const buildHourMonthlyRows = useCallback(
     (list: Meter[]): MonthlyComparisonRow[] =>
       list
-        .map((m) => {
-          const isIncoming = m.type === 'incoming' || m.type === 'main';
+        .map((m, i) => {
           const values: Record<string, number> = {};
           monthsList.forEach((mo, idx) => {
             values[mo.key] = Math.round((meterMonthlyConsumption.get(m.id)?.[idx] || 0) * 10) / 10;
           });
-          return { id: m.id, name: m.name, color: isIncoming ? '#D97706' : '#1D4ED8', values };
+          return { id: m.id, name: m.name, color: colorAt(i), values };
         })
         .sort((a, b) => (b.values[lastMonthKey] || 0) - (a.values[lastMonthKey] || 0)),
     [monthsList, meterMonthlyConsumption, lastMonthKey]
   );
 
-  const gasMeters = useMemo(() => meters.filter(isGasSection), [meters, isGasSection]);
-  const hourMeters = useMemo(() => meters.filter(isHourSection), [meters, isHourSection]);
-
-  const gasIncomingMeters = useMemo(
-    () => gasMeters.filter((m) => m.type === 'incoming' || m.type === 'main'),
-    [gasMeters]
+  // One graph per gas tier: RMS Incomers, Headers, Appliances
+  const gasIncomingMonthlyRows = useMemo(
+    () => buildMonthlyRows(gasIncomingMeters, (_m, i) => colorAt(i)),
+    [buildMonthlyRows, gasIncomingMeters]
   );
-  const gasOutgoingMainMeters = useMemo(
-    () => gasMeters.filter((m) => m.type === 'outgoing_main' || m.type === 'outgoing'),
-    [gasMeters]
-  );
-  const gasOutgoingSubMeters = useMemo(
-    () => gasMeters.filter((m) => m.type === 'outgoing_sub' || m.type === 'submeter' || m.type === 'outgoing_sub_sub'),
-    [gasMeters]
-  );
-
   const gasMainMonthlyRows = useMemo(
-    () => buildDirectionalMonthlyRows([...gasIncomingMeters, ...gasOutgoingMainMeters]),
-    [buildDirectionalMonthlyRows, gasIncomingMeters, gasOutgoingMainMeters]
+    () => buildMonthlyRows(gasOutgoingMainMeters, (_m, i) => colorAt(i)),
+    [buildMonthlyRows, gasOutgoingMainMeters]
   );
-  const gasSubMonthlyRows = useMemo(
-    () => buildDirectionalMonthlyRows([...gasIncomingMeters, ...gasOutgoingSubMeters]),
-    [buildDirectionalMonthlyRows, gasIncomingMeters, gasOutgoingSubMeters]
+  const gasApplianceMonthlyRows = useMemo(
+    () => buildMonthlyRows(gasApplianceMeters, (_m, i) => colorAt(i)),
+    [buildMonthlyRows, gasApplianceMeters]
   );
-  const hourMonthlyRows = useMemo(
-    () => buildDirectionalMonthlyRows(hourMeters),
-    [buildDirectionalMonthlyRows, hourMeters]
-  );
+
+  const hourCompMeters = useMemo(() => hourMeters.filter((m) => getHourGroupKey(m) === 'Compressor'), [hourMeters]);
+  const hourPumpMeters = useMemo(() => hourMeters.filter((m) => getHourGroupKey(m) === 'Pump'), [hourMeters]);
+  const hourGenMeters = useMemo(() => hourMeters.filter((m) => getHourGroupKey(m) === 'Generator'), [hourMeters]);
+  const hourOtherMeters = useMemo(() => hourMeters.filter((m) => getHourGroupKey(m) === 'Other'), [hourMeters]);
+
+  const hourCompMonthlyRows = useMemo(() => buildHourMonthlyRows(hourCompMeters), [buildHourMonthlyRows, hourCompMeters]);
+  const hourPumpMonthlyRows = useMemo(() => buildHourMonthlyRows(hourPumpMeters), [buildHourMonthlyRows, hourPumpMeters]);
+  const hourGenMonthlyRows = useMemo(() => buildHourMonthlyRows(hourGenMeters), [buildHourMonthlyRows, hourGenMeters]);
+  const hourOtherMonthlyRows = useMemo(() => buildHourMonthlyRows(hourOtherMeters), [buildHourMonthlyRows, hourOtherMeters]);
+
+  const totalHourComp = useMemo(() => sumFor(hourCompMeters, refIdx), [sumFor, hourCompMeters, refIdx]);
+  const totalHourPump = useMemo(() => sumFor(hourPumpMeters, refIdx), [sumFor, hourPumpMeters, refIdx]);
+  const totalHourGen = useMemo(() => sumFor(hourGenMeters, refIdx), [sumFor, hourGenMeters, refIdx]);
+  const totalHourOther = useMemo(() => sumFor(hourOtherMeters, refIdx), [sumFor, hourOtherMeters, refIdx]);
 
   const gasUnit = sections.find((s) => s.name.toLowerCase().includes('gas'))?.unit || 'm³';
   const hourUnit = sections.find((s) => s.name.toLowerCase().includes('hour'))?.unit || 'hrs';
+
+  const dashboardTabs = useMemo(() => {
+    const tabs: { id: 'energy' | 'gas' | 'hour'; label: string }[] = [];
+    const hasEnergyMeters = meters.some((m) => !isGasSection(m) && !isHourSection(m));
+    if (hasEnergyMeters) {
+      tabs.push({ id: 'energy', label: 'Energy Meter' });
+    }
+    if (gasMeters.length > 0) {
+      tabs.push({ id: 'gas', label: 'Gas Meter' });
+    }
+    if (hourMeters.length > 0) {
+      tabs.push({ id: 'hour', label: 'Hour Meter' });
+    }
+    return tabs;
+  }, [meters, gasMeters, hourMeters, isGasSection, isHourSection]);
+
+  useEffect(() => {
+    if (dashboardTabs.length > 0) {
+      if (!dashboardTabs.some((t) => t.id === activeTab)) {
+        setActiveTab(dashboardTabs[0].id);
+      }
+    }
+  }, [dashboardTabs, activeTab]);
 
   const refLabel = `${MONTH_NAMES[refMonth - 1]} ${refYear}`;
 
@@ -485,299 +687,299 @@ export default function DashboardPage() {
         </div>
       ) : (
         <>
-          {missingNamedMeters.length > 0 && (
-            <div className="flex items-start gap-2.5 rounded-[var(--radius-md)] border border-warning/30 bg-warning/10 px-4 py-3 text-sm text-warning">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="flex-shrink-0 mt-0.5">
-                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
-                <line x1="12" y1="9" x2="12" y2="13" />
-                <line x1="12" y1="17" x2="12.01" y2="17" />
-              </svg>
-              <span>
-                <strong>Incoming/Loss totals may be incomplete.</strong> No meter found matching:{' '}
-                {missingNamedMeters.map((n) => `"${n}"`).join(', ')}. Check meter names in Settings.
-              </span>
+          {/* Section Tabs */}
+          {dashboardTabs.length > 1 && (
+            <Tabs
+              tabs={dashboardTabs}
+              activeTab={activeTab}
+              onChange={(id) => setActiveTab(id as 'energy' | 'gas' | 'hour')}
+              className="mb-2"
+            />
+          )}
+
+          {/* ─── Energy Meter Tab ─── */}
+          {activeTab === 'energy' && (
+            <div className="space-y-6">
+              {/* Stats Cards */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 stagger-children">
+                <StatCard
+                  label={`Total ${tierLabels.incoming || 'Incoming'} Power`}
+                  value={`${totalIncoming.toLocaleString(undefined, { maximumFractionDigits: 0 })} kWh`}
+                  icon={
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
+                    </svg>
+                  }
+                  trend={totalIncomingPrev > 0 ? { value: percentChange, label: 'vs previous month' } : undefined}
+                  accentColor="var(--color-warning)"
+                />
+
+                <StatCard
+                  label={`${tierLabels.outgoing_main || 'Outgoing'} Power (Main)`}
+                  value={`${totalOutgoingMain.toLocaleString(undefined, { maximumFractionDigits: 0 })} kWh`}
+                  icon={
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+                    </svg>
+                  }
+                  trend={totalOutgoingMainPrev > 0 ? { value: outgoingMainChange, label: 'vs previous month' } : undefined}
+                  accentColor="var(--color-accent)"
+                />
+
+                <StatCard
+                  label={`${tierLabels.outgoing_sub || 'Outgoing'} Power (Sub)`}
+                  value={`${totalOutgoingSub.toLocaleString(undefined, { maximumFractionDigits: 0 })} kWh`}
+                  icon={
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <rect x="3" y="3" width="18" height="18" rx="2" />
+                      <line x1="9" y1="3" x2="9" y2="21" />
+                    </svg>
+                  }
+                  trend={totalOutgoingSubPrev > 0 ? { value: outgoingSubChange, label: 'vs previous month' } : undefined}
+                  accentColor="var(--color-success)"
+                />
+
+                {outgoingSubSubMeters.length > 0 && (
+                  <StatCard
+                    label={`${tierLabels.outgoing_sub_sub || 'Sub-Sub'} Power`}
+                    value={`${totalOutgoingSubSub.toLocaleString(undefined, { maximumFractionDigits: 0 })} kWh`}
+                    icon={
+                      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <rect x="3" y="3" width="18" height="18" rx="2" />
+                        <line x1="9" y1="3" x2="9" y2="21" />
+                        <line x1="15" y1="3" x2="15" y2="21" />
+                      </svg>
+                    }
+                    accentColor="var(--color-danger)"
+                  />
+                )}
+
+                <StatCard
+                  label="System Loss"
+                  value={`${Math.abs(systemLoss).toLocaleString(undefined, { maximumFractionDigits: 0 })} kWh`}
+                  icon={
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+                      <line x1="12" y1="9" x2="12" y2="13" />
+                      <line x1="12" y1="17" x2="12.01" y2="17" />
+                    </svg>
+                  }
+                  accentColor={
+                    systemLossPercent > 5
+                      ? 'var(--color-danger)'
+                      : systemLossPercent > 2
+                        ? 'var(--color-warning)'
+                        : 'var(--color-success)'
+                  }
+                  trend={{ value: systemLossPercent, label: 'of incoming' }}
+                />
+              </div>
+
+              {/* Meter-wise Consumption */}
+              <div>
+                <h2 className="text-lg font-semibold text-text-primary mb-1">Meter-wise Consumption</h2>
+                <p className="text-xs text-text-secondary mb-4">
+                  Energy (kWh) meters · last {comparisonRange} month{comparisonRange > 1 ? 's' : ''}, ending {refLabel}, grouped by hierarchy tier
+                </p>
+                <div className="grid grid-cols-1 gap-4">
+                  <FilterableChartCard title={<>{getEnergyGroupLabel('incoming', tierLabels)}</>} headerExtra={<><span className="text-xs text-text-muted">{incomingMonthlyRows.filter((r) => !r.defaultHidden).length} meters</span></>}
+                      months={monthsList}
+                      rows={incomingMonthlyRows}
+                      unit="kWh"
+                      emptyMessage="No incoming meters configured."
+                    />
+
+                  <FilterableChartCard title={<>{getEnergyGroupLabel('outgoing_main', tierLabels)}</>} headerExtra={<><span className="text-xs text-text-muted">{outgoingMainMonthlyRows.filter((r) => !r.defaultHidden).length} meters</span></>}
+                      months={monthsList}
+                      rows={outgoingMainMonthlyRows}
+                      unit="kWh"
+                      emptyMessage="No main outgoing meters configured."
+                    />
+
+                  <FilterableChartCard title={<>{getEnergyGroupLabel('outgoing_sub', tierLabels)}</>} headerExtra={<><span className="text-xs text-text-muted">{outgoingSubMonthlyRows.filter((r) => !r.defaultHidden).length} meters</span></>}
+                      months={monthsList}
+                      rows={outgoingSubMonthlyRows}
+                      unit="kWh"
+                      emptyMessage="No sub outgoing meters configured."
+                    />
+
+                  <FilterableChartCard title={<>{getEnergyGroupLabel('outgoing_sub_sub', tierLabels)}</>} headerExtra={<><span className="text-xs text-text-muted">{outgoingSubSubMonthlyRows.filter((r) => !r.defaultHidden).length} meters</span></>}
+                      months={monthsList}
+                      rows={outgoingSubSubMonthlyRows}
+                      unit="kWh"
+                      emptyMessage="No sub-of-sub outgoing meters configured."
+                    />
+                </div>
+              </div>
             </div>
           )}
 
-          {/* Stats Cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 stagger-children">
-            <StatCard
-              label="Total Incoming Power"
-              value={`${totalIncoming.toLocaleString(undefined, { maximumFractionDigits: 0 })} kWh`}
-              icon={
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
-                </svg>
-              }
-              trend={totalIncomingPrev > 0 ? { value: percentChange, label: 'vs previous month' } : undefined}
-              accentColor="var(--color-warning)"
-            />
+          {/* ─── Gas Meter Tab ─── */}
+          {activeTab === 'gas' && (
+            <div className="space-y-4">
+              <div>
+                <h2 className="text-lg font-semibold text-text-primary mb-1">Gas Meters</h2>
+                <p className="text-xs text-text-secondary mb-4">
+                  RMS incomers, headers & appliances · last {comparisonRange} month{comparisonRange > 1 ? 's' : ''}, ending {refLabel}
+                </p>
+                {/* Gas Stat Cards */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4 stagger-children">
+                  <StatCard
+                    label="Total RMS Incomer"
+                    value={`${totalGasIncomer.toLocaleString(undefined, { maximumFractionDigits: 0 })} ${gasUnit}`}
+                    accentColor="var(--color-warning)"
+                    icon={
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 3z" />
+                      </svg>
+                    }
+                  />
+                  <StatCard
+                    label="Total Consumption In Headers"
+                    value={`${totalGasHeaders.toLocaleString(undefined, { maximumFractionDigits: 0 })} ${gasUnit}`}
+                    accentColor="var(--color-accent)"
+                    icon={
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <circle cx="12" cy="12" r="10" />
+                        <polyline points="8 12 12 16 16 12" />
+                        <line x1="12" y1="8" x2="12" y2="16" />
+                      </svg>
+                    }
+                  />
+                  <StatCard
+                    label="Total Consumption In Appliances"
+                    value={`${totalGasAppliances.toLocaleString(undefined, { maximumFractionDigits: 0 })} ${gasUnit}`}
+                    accentColor="var(--color-success)"
+                    icon={
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <rect x="3" y="3" width="18" height="18" rx="2" />
+                        <line x1="9" y1="3" x2="9" y2="21" />
+                      </svg>
+                    }
+                  />
+                </div>
 
-            <StatCard
-              label="Outgoing Power (Main)"
-              value={`${totalOutgoingMain.toLocaleString(undefined, { maximumFractionDigits: 0 })} kWh`}
-              icon={
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
-                </svg>
-              }
-              accentColor="var(--color-accent)"
-            />
+                <div className="grid grid-cols-1 gap-4">
+                  <FilterableChartCard title={<>Gas Meter — RMS Incomers</>}
+                    headerExtra={<span className="text-xs text-text-muted">{gasIncomingMonthlyRows.length} meters</span>}
+                    months={monthsList}
+                    rows={gasIncomingMonthlyRows}
+                    unit={gasUnit}
+                    emptyMessage="No RMS incomer gas meters configured."
+                  />
 
-            <StatCard
-              label="Outgoing Power (Sub)"
-              value={`${totalOutgoingSub.toLocaleString(undefined, { maximumFractionDigits: 0 })} kWh`}
-              icon={
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <rect x="3" y="3" width="18" height="18" rx="2" />
-                  <line x1="9" y1="3" x2="9" y2="21" />
-                </svg>
-              }
-              accentColor="var(--color-success)"
-            />
+                  <FilterableChartCard title={<>Gas Meter — {getGasGroupLabel('outgoing_main', tierLabels)}</>}
+                    headerExtra={<span className="text-xs text-text-muted">{gasMainMonthlyRows.length} meters</span>}
+                    months={monthsList}
+                    rows={gasMainMonthlyRows}
+                    unit={gasUnit}
+                    emptyMessage="No gas header meters configured."
+                  />
 
-            <StatCard
-              label="Distribution Loss / Variance"
-              value={`${difference > 0 ? '+' : ''}${difference.toLocaleString(undefined, { maximumFractionDigits: 0 })} kWh`}
-              icon={
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
-                </svg>
-              }
-              accentColor={difference >= 0 ? 'var(--color-accent)' : 'var(--color-danger)'}
-            />
-          </div>
-
-          {/* Unit-wise Consumption Table */}
-          <Card className="p-0 overflow-hidden">
-            <div className="p-4 border-b border-border bg-bg-elevated">
-              <h2 className="text-lg font-semibold text-text-primary">Unit-wise Consumption</h2>
-              <p className="text-xs text-text-secondary mt-0.5">
-                Allocated energy per Major Unit for {refLabel} · % relative to total incoming power
-              </p>
-            </div>
-
-            {units.length === 0 ? (
-              <div className="text-center py-10 text-text-muted">
-                <p className="text-sm">No Major Units configured.</p>
-                <p className="text-xs mt-1">Configure units and allocations in Settings.</p>
+                  <FilterableChartCard title={<>Gas Meter — Appliances</>}
+                    headerExtra={<span className="text-xs text-text-muted">{gasApplianceMonthlyRows.length} meters</span>}
+                    months={monthsList}
+                    rows={gasApplianceMonthlyRows}
+                    unit={gasUnit}
+                    emptyMessage="No appliance gas meters configured."
+                  />
+                </div>
               </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm table-fixed">
-                  <thead>
-                    <tr className="sticky top-0 z-10 bg-bg-elevated">
-                      <th className="px-3 py-2.5 text-left font-bold text-[11px] uppercase tracking-wider text-text-secondary w-[25%] border-b-2 border-table-header-border">Unit Name</th>
-                      <th className="px-3 py-2.5 text-right font-bold text-[11px] uppercase tracking-wider text-text-secondary w-[22%] border-b-2 border-table-header-border">kWh</th>
-                      <th className="px-3 py-2.5 text-right font-bold text-[11px] uppercase tracking-wider text-text-secondary w-[53%] border-b-2 border-table-header-border">
-                        Relative %
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {unitBreakdown.map((u, idx) => {
-                      const pct = totalIncoming > 0 ? (u.consumption / totalIncoming) * 100 : 0;
-                      return (
-                        <tr
-                          key={u.id}
-                          className={`border-b border-border transition-colors hover:bg-bg-surface-hover ${
-                            idx % 2 === 0 ? 'bg-bg-surface' : 'bg-bg-primary/50'
-                          }`}
-                        >
-                          <td className="px-4 py-3 font-medium text-text-primary">
-                            <div className="flex items-center gap-2 min-w-0">
-                              <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: u.color }} />
-                              <span className="truncate" title={u.name}>{u.name}</span>
-                            </div>
-                          </td>
-                          <td className="px-4 py-3 text-right font-bold tabular-nums" style={{ color: u.color }}>
-                            {u.consumption.toLocaleString(undefined, { maximumFractionDigits: 1 })}
-                          </td>
-                          <td className="px-4 py-3">
-                            <div className="flex items-center justify-end gap-3">
-                              <div className="h-2 flex-1 bg-bg-elevated rounded-full overflow-hidden">
-                                <div
-                                  className="h-full rounded-full transition-all duration-500"
-                                  style={{ width: `${Math.min(100, pct)}%`, backgroundColor: u.color }}
-                                />
-                              </div>
-                              <span className="text-xs font-semibold text-text-secondary tabular-nums w-12 text-right shrink-0">
-                                {pct.toFixed(1)}%
-                              </span>
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+            </div>
+          )}
+
+          {/* ─── Hour Meter Tab ─── */}
+          {activeTab === 'hour' && (
+            <div className="space-y-4">
+              <div>
+                <h2 className="text-lg font-semibold text-text-primary mb-1">Hour Meters</h2>
+                <p className="text-xs text-text-secondary mb-4">
+                  Equipment running hours grouped by machinery group · last {comparisonRange} month{comparisonRange > 1 ? 's' : ''}, ending {refLabel}
+                </p>
+
+                {/* Hour Meter Stat Cards */}
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4 stagger-children">
+                  <StatCard
+                    label={tierLabels.hour_compressor || 'Compressors'}
+                    value={`${totalHourComp.toLocaleString(undefined, { maximumFractionDigits: 1 })} hrs`}
+                    accentColor="var(--color-accent)"
+                    icon={
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <circle cx="12" cy="12" r="10" />
+                        <path d="M14.31 8l5.74 9.94M9.69 8h11.48M7.38 12l5.74-9.94M9.69 16L3.95 6.06M14.31 16H2.83M16.62 12l-5.74 9.94" />
+                      </svg>
+                    }
+                  />
+                  <StatCard
+                    label={tierLabels.hour_pump || 'Pumps'}
+                    value={`${totalHourPump.toLocaleString(undefined, { maximumFractionDigits: 1 })} hrs`}
+                    accentColor="var(--color-warning)"
+                    icon={
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z" />
+                      </svg>
+                    }
+                  />
+                  <StatCard
+                    label={tierLabels.hour_generator || 'Generators'}
+                    value={`${totalHourGen.toLocaleString(undefined, { maximumFractionDigits: 1 })} hrs`}
+                    accentColor="var(--color-success)"
+                    icon={
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
+                      </svg>
+                    }
+                  />
+                  <StatCard
+                    label={tierLabels.hour_other || 'Other Machinery'}
+                    value={`${totalHourOther.toLocaleString(undefined, { maximumFractionDigits: 1 })} hrs`}
+                    accentColor="var(--color-primary, #6366f1)"
+                    icon={
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <rect x="2" y="7" width="20" height="14" rx="2" ry="2" />
+                        <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" />
+                      </svg>
+                    }
+                  />
+                </div>
+
+                {/* Group Charts Grid */}
+                <div className="grid grid-cols-1 gap-4">
+                  <FilterableChartCard title={<>{tierLabels.hour_compressor || 'Compressors'}</>} headerExtra={<><span className="text-xs text-text-muted">{hourCompMeters.length} meters</span></>}
+                      months={monthsList}
+                      rows={hourCompMonthlyRows}
+                      unit={hourUnit}
+                      emptyMessage="No compressor meters configured."
+                      yAxisWidth={140}
+                    />
+
+                  <FilterableChartCard title={<>{tierLabels.hour_pump || 'Pumps'}</>} headerExtra={<><span className="text-xs text-text-muted">{hourPumpMeters.length} meters</span></>}
+                      months={monthsList}
+                      rows={hourPumpMonthlyRows}
+                      unit={hourUnit}
+                      emptyMessage="No pump meters configured."
+                      yAxisWidth={140}
+                    />
+
+                  <FilterableChartCard title={<>{tierLabels.hour_generator || 'Generators'}</>} headerExtra={<><span className="text-xs text-text-muted">{hourGenMeters.length} meters</span></>}
+                      months={monthsList}
+                      rows={hourGenMonthlyRows}
+                      unit={hourUnit}
+                      emptyMessage="No generator meters configured."
+                      yAxisWidth={140}
+                    />
+
+                  <FilterableChartCard title={<>{tierLabels.hour_other || 'Other Machinery'}</>} headerExtra={<><span className="text-xs text-text-muted">{hourOtherMeters.length} meters</span></>}
+                      months={monthsList}
+                      rows={hourOtherMonthlyRows}
+                      unit={hourUnit}
+                      emptyMessage="No other machinery configured."
+                      yAxisWidth={140}
+                    />
+                </div>
               </div>
-            )}
-          </Card>
-
-          {/* Monthly Comparison Bar Chart — Units */}
-          <Card>
-            <div className="mb-2">
-              <h2 className="text-lg font-semibold text-text-primary">Monthly Comparison — Major Units</h2>
-              <p className="text-xs text-text-secondary mt-0.5">
-                Last {comparisonRange} months of allocated consumption, ending {refLabel}
-              </p>
             </div>
-            <MonthlyComparisonChart months={monthsList} rows={unitMonthlyRows} unit="kWh" />
-          </Card>
-
-          {/* Meter-wise Consumption */}
-          <div>
-            <h2 className="text-lg font-semibold text-text-primary mb-1">Meter-wise Consumption</h2>
-            <p className="text-xs text-text-secondary mb-4">
-              Energy (kWh) meters · last {comparisonRange} month{comparisonRange > 1 ? 's' : ''}, ending {refLabel}, grouped by hierarchy tier
-            </p>
-            <div className="grid grid-cols-1 gap-4">
-              <Card>
-                <div className="flex items-center gap-2 mb-3">
-                  <span className="text-lg">⚡</span>
-                  <h3 className="font-semibold text-text-primary text-sm">Incoming Meters</h3>
-                  <span className="text-xs text-text-muted ml-auto">{incomingMonthlyRows.length} meters</span>
-                </div>
-                <MonthlyComparisonChart
-                  months={monthsList}
-                  rows={incomingMonthlyRows}
-                  unit="kWh"
-                  emptyMessage="No incoming meters configured."
-                />
-              </Card>
-
-              <Card>
-                <div className="flex items-center gap-2 mb-3">
-                  <span className="text-lg">⚡</span>
-                  <h3 className="font-semibold text-text-primary text-sm">Outgoing Meters (Main)</h3>
-                  <span className="text-xs text-text-muted ml-auto">{outgoingMainMonthlyRows.length} meters</span>
-                </div>
-                <MonthlyComparisonChart
-                  months={monthsList}
-                  rows={outgoingMainMonthlyRows}
-                  unit="kWh"
-                  emptyMessage="No main outgoing meters configured."
-                />
-              </Card>
-
-              <Card>
-                <div className="flex items-center gap-2 mb-3">
-                  <span className="text-lg">📊</span>
-                  <h3 className="font-semibold text-text-primary text-sm">Outgoing Meters (Sub)</h3>
-                  <span className="text-xs text-text-muted ml-auto">{outgoingSubMonthlyRows.length} meters</span>
-                </div>
-                <MonthlyComparisonChart
-                  months={monthsList}
-                  rows={outgoingSubMonthlyRows}
-                  unit="kWh"
-                  emptyMessage="No sub outgoing meters configured."
-                />
-              </Card>
-
-              <Card>
-                <div className="flex items-center gap-2 mb-3">
-                  <span className="text-lg">📊</span>
-                  <h3 className="font-semibold text-text-primary text-sm">Outgoing Meters (Sub of Sub)</h3>
-                  <span className="text-xs text-text-muted ml-auto">{outgoingSubSubMonthlyRows.length} meters</span>
-                </div>
-                <MonthlyComparisonChart
-                  months={monthsList}
-                  rows={outgoingSubSubMonthlyRows}
-                  unit="kWh"
-                  emptyMessage="No sub-of-sub outgoing meters configured."
-                />
-              </Card>
-            </div>
-          </div>
-
-          {/* Gas Meter & Hour Meter */}
-          <div>
-            <h2 className="text-lg font-semibold text-text-primary mb-1">Gas &amp; Hour Meters</h2>
-            <p className="text-xs text-text-secondary mb-4">
-              Incoming vs. Outgoing · last {comparisonRange} month{comparisonRange > 1 ? 's' : ''}, ending {refLabel}
-            </p>
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              <Card>
-                <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center gap-2">
-                    <span className="text-lg">🔥</span>
-                    <h3 className="font-semibold text-text-primary text-sm">Gas Meter — Outgoing (Main)</h3>
-                  </div>
-                  <div className="flex items-center gap-3 text-[11px] text-text-secondary">
-                    <span className="flex items-center gap-1">
-                      <span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ backgroundColor: '#D97706' }} />
-                      Incoming
-                    </span>
-                    <span className="flex items-center gap-1">
-                      <span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ backgroundColor: '#1D4ED8' }} />
-                      Outgoing
-                    </span>
-                  </div>
-                </div>
-                <MonthlyComparisonChart
-                  months={monthsList}
-                  rows={gasMainMonthlyRows}
-                  unit={gasUnit}
-                  emptyMessage="No main outgoing gas meters configured."
-                />
-              </Card>
-
-              <Card>
-                <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center gap-2">
-                    <span className="text-lg">🔥</span>
-                    <h3 className="font-semibold text-text-primary text-sm">Gas Meter — Outgoing (Sub)</h3>
-                  </div>
-                  <div className="flex items-center gap-3 text-[11px] text-text-secondary">
-                    <span className="flex items-center gap-1">
-                      <span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ backgroundColor: '#D97706' }} />
-                      Incoming
-                    </span>
-                    <span className="flex items-center gap-1">
-                      <span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ backgroundColor: '#1D4ED8' }} />
-                      Outgoing
-                    </span>
-                  </div>
-                </div>
-                <MonthlyComparisonChart
-                  months={monthsList}
-                  rows={gasSubMonthlyRows}
-                  unit={gasUnit}
-                  emptyMessage="No sub outgoing gas meters configured."
-                />
-              </Card>
-            </div>
-
-            {/* Hour Meter always spans the full width, in its own row */}
-            <div className="grid grid-cols-1 gap-4 mt-4">
-              <Card>
-                <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center gap-2">
-                    <span className="text-lg">⏱️</span>
-                    <h3 className="font-semibold text-text-primary text-sm">Hour Meter</h3>
-                  </div>
-                  <div className="flex items-center gap-3 text-[11px] text-text-secondary">
-                    <span className="flex items-center gap-1">
-                      <span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ backgroundColor: '#D97706' }} />
-                      Incoming
-                    </span>
-                    <span className="flex items-center gap-1">
-                      <span className="w-2.5 h-2.5 rounded-sm inline-block" style={{ backgroundColor: '#1D4ED8' }} />
-                      Outgoing
-                    </span>
-                  </div>
-                </div>
-                <MonthlyComparisonChart
-                  months={monthsList}
-                  rows={hourMonthlyRows}
-                  unit={hourUnit}
-                  emptyMessage="No hour meters configured."
-                  yAxisWidth={150}
-                />
-              </Card>
-            </div>
-          </div>
+          )}
         </>
       )}
     </div>

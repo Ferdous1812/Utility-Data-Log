@@ -32,9 +32,9 @@
   --color-text-secondary: #64748B;
   --color-text-muted: #94A3B8;
 
-  /* Table-specific tokens (header reads distinctly from body rows) */
-  --color-table-header: #F8FAFC;
-  --color-table-header-border: #CBD5E1;
+  /* Table-specific tokens (fully opaque dark headers with white text across both modes) */
+  --color-table-header: #1E293B;
+  --color-table-header-border: #334155;
 
   /* Font — clean, legible sans-serif optimized for data */
   --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -94,8 +94,8 @@
   --color-text-secondary: #94A3B8;
   --color-text-muted: #64748B;
 
-  --color-table-header: #020617;
-  --color-table-header-border: #38BDF8;
+  --color-table-header: #0F172A;
+  --color-table-header-border: #1E293B;
 
   color-scheme: dark;
 }
@@ -129,10 +129,38 @@
     box-shadow: 0 0 12px 0 var(--color-accent-glow);
   }
 
-  /* Table headers get a faint neon glow beneath their bottom border
-     in dark mode, echoing the "data terminal" direction. */
-  .dark table thead th {
-    box-shadow: 0 1px 8px -1px var(--color-accent-glow);
+  /* Table headers: fully opaque, crisp white text, no border box, background box, or glowing shadows */
+  table thead th {
+    box-shadow: none !important;
+    border-left: none !important;
+    border-right: none !important;
+    border-top: none !important;
+  }
+
+  table thead th button,
+  table thead button {
+    font-size: inherit !important;
+    font-family: inherit !important;
+    font-weight: inherit !important;
+    text-transform: inherit !important;
+    letter-spacing: inherit !important;
+    color: inherit;
+    background: transparent !important;
+    background-color: transparent !important;
+    border: none !important;
+    border-width: 0 !important;
+    outline: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+  }
+
+  table thead th button:focus,
+  table thead th button:focus-visible,
+  table thead button:focus,
+  table thead button:focus-visible {
+    outline: none !important;
+    box-shadow: none !important;
+    border: none !important;
   }
 
   /* Scrollbar styling */

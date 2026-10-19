@@ -332,7 +332,6 @@ export async function updateUnitsOrder(
 
   revalidatePath('/dashboard');
   revalidatePath('/settings');
-  revalidatePath('/consumption');
 
   return { success: true, message: 'Unit order updated successfully!' };
 }

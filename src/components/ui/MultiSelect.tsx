@@ -15,6 +15,7 @@ interface MultiSelectProps {
   values: string[];
   onChange: (values: string[]) => void;
   className?: string;
+  compact?: boolean;
 }
 
 export function MultiSelect({
@@ -24,6 +25,7 @@ export function MultiSelect({
   values,
   onChange,
   className = '',
+  compact = false,
 }: MultiSelectProps) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -70,15 +72,15 @@ export function MultiSelect({
 
   return (
     <div className="flex flex-col gap-1.5" ref={ref}>
-      {label && <label className="text-sm font-medium text-text-secondary">{label}</label>}
+      {label && <label className={`font-medium text-text-secondary ${compact ? 'text-xs' : 'text-sm'}`}>{label}</label>}
       <div className="relative">
         <button
           type="button"
           onClick={() => setOpen((o) => !o)}
           className={`
-            w-full bg-bg-surface border border-border rounded-[var(--radius-md)]
-            text-left text-sm text-text-primary
-            pl-4 pr-10 py-2.5
+            w-full bg-bg-surface border border-border rounded-[var(--radius-sm)]
+            text-left text-text-primary
+            ${compact ? 'text-[11px] pl-2.5 pr-7 py-1' : 'text-sm pl-4 pr-10 py-2.5'}
             transition-all duration-200 cursor-pointer
             hover:border-accent/50
             focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/30
@@ -88,8 +90,8 @@ export function MultiSelect({
         >
           <span className={values.length === 0 ? 'text-text-muted' : ''}>{summary}</span>
         </button>
-        <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-text-muted">
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+        <div className={`absolute top-1/2 -translate-y-1/2 pointer-events-none text-text-muted ${compact ? 'right-1.5' : 'right-3'}`}>
+          <svg width={compact ? '12' : '16'} height={compact ? '12' : '16'} viewBox="0 0 16 16" fill="none">
             <path d="M4 6L8 10L12 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
         </div>
@@ -122,6 +124,7 @@ export function MultiSelect({
                         opt={opt}
                         checked={values.includes(opt.value)}
                         onToggle={toggle}
+                        compact={compact}
                       />
                     ))}
                   </div>
@@ -132,11 +135,12 @@ export function MultiSelect({
                     opt={opt}
                     checked={values.includes(opt.value)}
                     onToggle={toggle}
+                    compact={compact}
                   />
                 ))}
 
             {options.length === 0 && (
-              <div className="px-3 py-2 text-xs text-text-muted">No options</div>
+              <div className={`px-3 py-2 text-text-muted ${compact ? 'text-[11px]' : 'text-xs'}`}>No options</div>
             )}
           </div>
         )}
@@ -149,18 +153,26 @@ function MultiSelectRow({
   opt,
   checked,
   onToggle,
+  compact = false,
 }: {
   opt: MultiSelectOption;
   checked: boolean;
   onToggle: (value: string) => void;
+  compact?: boolean;
 }) {
   return (
-    <label className="flex items-center gap-2.5 px-3 py-1.5 text-sm text-text-primary hover:bg-bg-surface-hover cursor-pointer transition-colors">
+    <label
+      className={`flex items-center gap-2 px-2.5 hover:bg-bg-surface-hover cursor-pointer transition-colors ${
+        compact ? 'py-1 text-xs' : 'py-1.5 text-sm'
+      } text-text-primary`}
+    >
       <input
         type="checkbox"
         checked={checked}
         onChange={() => onToggle(opt.value)}
-        className="w-4 h-4 rounded-[var(--radius-sm)] accent-accent cursor-pointer flex-shrink-0"
+        className={`${
+          compact ? 'w-3.5 h-3.5' : 'w-4 h-4'
+        } rounded-[var(--radius-sm)] accent-accent cursor-pointer flex-shrink-0`}
       />
       <span className="truncate">{opt.label}</span>
     </label>

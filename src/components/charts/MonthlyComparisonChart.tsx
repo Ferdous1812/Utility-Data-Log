@@ -23,6 +23,8 @@ export interface MonthlyComparisonRow {
   name: string;
   color: string;
   values: Record<string, number>;
+  /** When true the row starts unselected in the dashboard multi-select filter. */
+  defaultHidden?: boolean;
 }
 
 interface MonthlyComparisonChartProps {
@@ -88,6 +90,9 @@ export function MonthlyComparisonChart({ months, rows, unit = 'kWh', emptyMessag
   // tooltip/cells use to derive the correct shade.
   const data = rows.map((r) => ({ name: r.name, baseColor: r.color, ...r.values }));
   const colorMap = Object.fromEntries(rows.map((r) => [r.name, r.color]));
+  // Size the label column to the longest meter name (12px bold ≈ 7.5px/char) so names aren't cropped.
+  const longestName = rows.reduce((max, r) => Math.max(max, r.name.length), 0);
+  const labelWidth = Math.min(320, Math.max(yAxisWidth, Math.ceil(longestName * 7.5) + 16));
   const height = Math.max(280, rows.length * months.length * 20 + rows.length * 16);
 
   return (
@@ -106,7 +111,7 @@ export function MonthlyComparisonChart({ months, rows, unit = 'kWh', emptyMessag
           <YAxis
             type="category"
             dataKey="name"
-            width={yAxisWidth}
+            width={labelWidth}
             tick={<ColoredAxisTick colorMap={colorMap} />}
             tickLine={false}
             axisLine={{ stroke: 'var(--color-border)' }}

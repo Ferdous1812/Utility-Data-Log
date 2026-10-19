@@ -42,25 +42,25 @@ export function StatCard({ label, value, icon, trend, accentColor = 'var(--color
       {/* Flat accent stripe */}
       <div className="absolute top-0 left-0 right-0 h-[3px]" style={{ backgroundColor: accentColor }} />
 
-      <div className="flex items-start justify-between relative z-10 p-5 pt-[22px]">
-        <div className="flex flex-col gap-1">
-          <span className="text-xs font-medium uppercase tracking-wider text-text-secondary">{label}</span>
-          <span className="text-2xl font-semibold text-text-primary tracking-tight tabular-nums">{value}</span>
+      <div className="flex items-start justify-between relative z-10 p-3 pt-[16px]">
+        <div className="flex flex-col gap-0.5">
+          <span className="text-[10px] font-medium uppercase tracking-wider text-text-secondary">{label}</span>
+          <span className="text-lg font-semibold text-text-primary tracking-tight tabular-nums">{value}</span>
           {trend && (
-            <div className="flex items-center gap-1 mt-1">
+            <div className="flex items-center gap-1 mt-0.5">
               <span
-                className={`text-xs font-semibold ${
+                className={`text-[10px] font-semibold ${
                   isPositive ? 'text-danger' : 'text-success'
                 }`}
               >
                 {isPositive ? '▲' : '▼'} {Math.abs(trend.value).toFixed(1)}%
               </span>
-              <span className="text-xs text-text-muted">{trend.label}</span>
+              <span className="text-[10px] text-text-muted">{trend.label}</span>
             </div>
           )}
         </div>
         <div
-          className="flex items-center justify-center w-11 h-11 rounded-[var(--radius-md)]"
+          className="flex items-center justify-center w-8 h-8 rounded-[var(--radius-md)]"
           style={{ backgroundColor: `color-mix(in srgb, ${accentColor} 12%, transparent)` }}
         >
           <div style={{ color: accentColor }}>{icon}</div>

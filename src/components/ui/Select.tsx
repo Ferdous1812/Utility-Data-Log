@@ -32,11 +32,11 @@ export const Select = React.forwardRef<HTMLSelectElement, SelectProps>(
     const hasGroups = Object.keys(grouped).some((k) => k !== '__ungrouped__');
 
     return (
-      <div className="flex flex-col gap-1.5">
+      <div className="flex flex-col gap-1">
         {label && (
           <label
             htmlFor={selectId}
-            className="text-sm font-medium text-text-secondary"
+            className="text-xs font-medium text-text-secondary"
           >
             {label}
           </label>
@@ -51,8 +51,8 @@ export const Select = React.forwardRef<HTMLSelectElement, SelectProps>(
               transition-all duration-200
               focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/30
               disabled:opacity-50 disabled:cursor-not-allowed
-              pl-4 pr-10
-              ${large ? 'py-4 text-lg min-h-[56px]' : 'py-2.5 text-sm'}
+              pl-3 pr-8
+              ${large ? 'py-3.5 text-base min-h-[48px]' : 'py-2 text-xs sm:text-sm'}
               ${error ? 'border-danger focus:border-danger focus:ring-danger/30' : ''}
               ${className}
             `}

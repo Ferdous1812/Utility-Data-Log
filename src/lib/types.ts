@@ -31,6 +31,7 @@ export interface Reading {
   reading_value: number;
   reading_date: string;
   usage: number | null;
+  is_reset?: boolean;
   logged_by: string;
   created_at: string;
   // Joined fields
@@ -98,3 +99,34 @@ export interface UnitRemainderRule {
   remainder_share_percent: number;
   updated_at: string;
 }
+
+export interface CustomTierLabels {
+  incoming: string;
+  outgoing_main: string;
+  outgoing_sub: string;
+  outgoing_sub_sub: string;
+  gas_incoming: string;
+  gas_outgoing_main: string;
+  gas_outgoing_sub: string;
+  gas_outgoing_sub_sub: string;
+  hour_compressor: string;
+  hour_pump: string;
+  hour_generator: string;
+  hour_other: string;
+}
+
+export const DEFAULT_TIER_LABELS: CustomTierLabels = {
+  incoming: 'Incoming Feeder',
+  outgoing_main: 'Mother Panel',
+  outgoing_sub: 'Breaker Submeter',
+  outgoing_sub_sub: 'Sub-Submeter',
+  gas_incoming: 'RMS Incomer',
+  gas_outgoing_main: 'Gas Header',
+  gas_outgoing_sub: 'Appliance Sub',
+  gas_outgoing_sub_sub: 'Sub-Appliance',
+  hour_compressor: 'Compressor',
+  hour_pump: 'Pump',
+  hour_generator: 'Generator',
+  hour_other: 'Other Machinery',
+};
+

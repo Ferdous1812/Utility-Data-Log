@@ -1,137 +1,185 @@
 'use client';
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { createClient } from '@/lib/supabase/client';
-import { addMeter, updateMeter, deleteMeter, updateMetersOrder, addMeterSection, deleteMeterSection } from '@/lib/actions';
-import {
-  addUnit,
-  deleteUnit,
-  updateUnitAllocations,
-  updateUnitsOrder,
-  addUnitRemainderRule,
-  updateUnitRemainderRule,
-  deleteUnitRemainderRule,
-} from '@/lib/unitActions';
-import { Card } from '@/components/ui/Card';
+import { addMeter, updateMeter, deleteMeter, updateMetersOrder, addMeterSection, updateMeterSection, deleteMeterSection, renameEquipmentCategory, deleteEquipmentCategory } from '@/lib/actions';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
-import { MeterTypeBadge } from '@/components/ui/Badge';
+import { Badge, MeterTypeBadge } from '@/components/ui/Badge';
 import { MeterForm } from '@/components/MeterForm';
+import { Tabs } from '@/components/ui/Tabs';
+import { Modal } from '@/components/ui/Modal';
 import { useToast } from '@/components/ui/Toast';
-import {
-  RemainderRuleCard,
-  AllocationCompositionBadge,
-  type RemainderRuleValue,
-} from '@/components/settings/AllocationRulePanels';
-import type { Meter, Unit, UnitAllocation, UnitRemainderRule, MeterSection } from '@/lib/types';
-import { Plus } from 'lucide-react';
+import type { Meter, MeterSection, CustomTierLabels } from '@/lib/types';
+import { DEFAULT_TIER_LABELS } from '@/lib/types';
+import type { HourEquipmentGroup } from '@/types/hour';
+
+function getSectionDomain(sec?: MeterSection | null): 'energy' | 'gas' | 'hour' {
+  if (!sec) return 'energy';
+  const name = (sec.name || '').toLowerCase();
+  const unit = (sec.unit || '').toLowerCase();
+  if (name.includes('hour') || unit === 'hrs' || unit === 'hr' || unit.includes('hour')) return 'hour';
+  if (name.includes('gas') || name.includes('rms') || unit === 'm³' || unit === 'm3' || unit.includes('m3') || unit.includes('m³')) return 'gas';
+  return 'energy';
+}
 
 export default function SettingsPage() {
   const supabase = createClient();
   const { addToast } = useToast();
 
-  const [activeTab, setActiveTab] = useState<'meters' | 'units'>('meters');
-
   // Shared Data State
   const [meters, setMeters] = useState<Meter[]>([]);
   const [sections, setSections] = useState<MeterSection[]>([]);
-  const [units, setUnits] = useState<Unit[]>([]);
-  const [allocations, setAllocations] = useState<UnitAllocation[]>([]);
-  const [remainderRules, setRemainderRules] = useState<UnitRemainderRule[]>([]);
+  const [activeSectionId, setActiveSectionId] = useState<string>('');
   const [loading, setLoading] = useState(true);
+
+  const activeSection = sections.find((sec) => sec.id === (activeSectionId || sections[0]?.id));
 
   // Meters Tab State
   const [meterFormOpen, setMeterFormOpen] = useState(false);
   const [editingMeter, setEditingMeter] = useState<Meter | null>(null);
   const [meterSubmitting, setMeterSubmitting] = useState(false);
   const [newSectionName, setNewSectionName] = useState('');
-  const [newSectionIcon, setNewSectionIcon] = useState('⚡');
+  const [newSectionIcon, setNewSectionIcon] = useState('');
   const [newSectionColor, setNewSectionColor] = useState('accent');
   const [newSectionUnit, setNewSectionUnit] = useState('kWh');
   const [sectionCreating, setSectionCreating] = useState(false);
   const [showSectionForm, setShowSectionForm] = useState(false);
+  const [editingSection, setEditingSection] = useState<MeterSection | null>(null);
+  const [editSectionName, setEditSectionName] = useState('');
+  const [editSectionUnit, setEditSectionUnit] = useState('kWh');
+  const [sectionUpdating, setSectionUpdating] = useState(false);
+
+  // Hierarchy Tier Names Customization
+  const [tierLabels, setTierLabels] = useState<CustomTierLabels>(DEFAULT_TIER_LABELS);
+  const [showTierModal, setShowTierModal] = useState(false);
+  const [tempTierLabels, setTempTierLabels] = useState<CustomTierLabels>(DEFAULT_TIER_LABELS);
+
+  // Equipment Category Management
+  const [categoryRenameTarget, setCategoryRenameTarget] = useState<string | null>(null);
+  const [categoryNewName, setCategoryNewName] = useState('');
+  const [categoryActionLoading, setCategoryActionLoading] = useState(false);
+  const [manualOldCategory, setManualOldCategory] = useState('');
+  const [manualNewCategory, setManualNewCategory] = useState('');
+
+  // Load custom tier names from localStorage on client
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('utility_tier_labels');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        setTierLabels({ ...DEFAULT_TIER_LABELS, ...parsed });
+        setTempTierLabels({ ...DEFAULT_TIER_LABELS, ...parsed });
+      }
+    } catch (e) {}
+  }, []);
 
   // Sorting & Collapsing State for Meters
   type SortField = 'name' | 'category' | 'location' | 'parent' | 'mf';
   const [sortField, setSortField] = useState<SortField | null>(null);
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
   const [collapsedMeterIds, setCollapsedMeterIds] = useState<Set<string>>(new Set());
+  const [openMenuMeterId, setOpenMenuMeterId] = useState<string | null>(null);
+  const menuRef = useRef<HTMLDivElement | null>(null);
 
-  // Units Tab State
-  const [newUnitName, setNewUnitName] = useState('');
-  const [selectedUnitId, setSelectedUnitId] = useState<string>('');
-  const [unitSaving, setUnitSaving] = useState(false);
-  const [unitCreating, setUnitCreating] = useState(false);
-  const [localAllocations, setLocalAllocations] = useState<Record<string, string>>({});
-  // Each rule carries a stable localKey (separate from its DB id, which
-  // only exists once the rule has been saved) so React keys and dirty/
-  // saving tracking stay correct across add/save/delete.
-  const [localRemainderRules, setLocalRemainderRules] = useState<
-    (RemainderRuleValue & { localKey: string })[]
-  >([]);
-  const [dirtyRuleKeys, setDirtyRuleKeys] = useState<Set<string>>(new Set());
-  const [savingRuleKey, setSavingRuleKey] = useState<string | null>(null);
+  // Close kebab menu on outside click
+  useEffect(() => {
+    if (!openMenuMeterId) return;
+    const handler = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setOpenMenuMeterId(null);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [openMenuMeterId]);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
-    const [unitsRes, metersRes, allocationsRes, sectionsRes, remainderRulesRes] = await Promise.all([
-      supabase.from('units').select('*').order('sort_order', { ascending: true }),
+    const [metersRes, sectionsRes, energyMetersRes, gasMetersRes, hourMetersRes] = await Promise.all([
       supabase.from('meters').select('*').eq('is_active', true).order('sort_order', { ascending: true }).order('name'),
-      supabase.from('unit_allocations').select('*'),
       supabase.from('meter_sections').select('*').order('sort_order', { ascending: true }),
-      supabase.from('unit_remainder_rules').select('*'),
+      supabase.from('energy_meters').select('id, category, is_primary_for_total, reading_mode, devices:energy_meter_devices(id, checkpoint_label, sort_order)').eq('is_active', true),
+      supabase.from('gas_meters').select('id, category, is_primary_for_total').eq('is_active', true),
+      supabase.from('hour_meters').select('id, equipment_group, category').eq('is_active', true),
     ]);
 
-    const fetchedUnits = (unitsRes.data || []) as Unit[];
-    setUnits(fetchedUnits);
-    setMeters((metersRes.data || []) as Meter[]);
-    setAllocations((allocationsRes.data || []) as UnitAllocation[]);
-    setSections((sectionsRes.data || []) as MeterSection[]);
-    setRemainderRules((remainderRulesRes.data || []) as UnitRemainderRule[]);
+    // Merge domain-specific fields onto meter objects so the form can pre-populate them
+    const energyMap = new Map<string, { category: string; is_primary_for_total: boolean; reading_mode: string; branches: { id: string; label: string }[] }>();
+    (energyMetersRes.data || []).forEach((em: any) => {
+      energyMap.set(em.id, {
+        category: em.category,
+        is_primary_for_total: em.is_primary_for_total,
+        reading_mode: em.reading_mode || 'checkpoint',
+        branches: [...(em.devices || [])]
+          .sort((a: any, b: any) => a.sort_order - b.sort_order)
+          .map((d: any) => ({ id: d.id, label: d.checkpoint_label })),
+      });
+    });
 
-    if (fetchedUnits.length > 0 && !selectedUnitId) {
-      setSelectedUnitId(fetchedUnits[0].id);
-    }
+    const gasMap = new Map<string, { category: string; is_primary_for_total: boolean }>();
+    (gasMetersRes.data || []).forEach((gm: any) => {
+      gasMap.set(gm.id, { category: gm.category, is_primary_for_total: gm.is_primary_for_total });
+    });
+
+    const hourMap = new Map<string, { equipment_group: string; category: string }>();
+    (hourMetersRes.data || []).forEach((hm: any) => {
+      hourMap.set(hm.id, { equipment_group: hm.equipment_group, category: hm.category });
+    });
+
+    const metersMerged = (metersRes.data || []).map((m: any) => {
+      const energy = energyMap.get(m.id);
+      const gas = gasMap.get(m.id);
+      const hour = hourMap.get(m.id);
+      return {
+        ...m,
+        energy_category: energy?.category || '',
+        reading_mode: energy?.reading_mode || 'checkpoint',
+        energy_branches: energy?.branches || [],
+        gas_category: gas?.category || '',
+        equipment_group: hour?.equipment_group,
+        category: hour?.category || gas?.category || energy?.category || '',
+        is_primary_for_total: (gas?.is_primary_for_total ?? energy?.is_primary_for_total) ?? (m.type === 'incoming' || m.type === 'main'),
+        is_in_energy_meters: !!energy,
+        is_in_gas_meters: !!gas,
+        is_in_hour_meters: !!hour,
+      };
+    });
+
+    setMeters(metersMerged as Meter[]);
+    setSections((sectionsRes.data || []) as MeterSection[]);
     setLoading(false);
-  }, [supabase, selectedUnitId]);
+  }, [supabase]);
 
   useEffect(() => {
     fetchData();
   }, [fetchData]);
 
-  // Load allocations for selected unit into local state
   useEffect(() => {
-    if (!selectedUnitId) {
-      setLocalAllocations({});
-      return;
+    if (sections.length > 0 && !activeSectionId) {
+      setActiveSectionId(sections[0].id);
     }
-    const unitAlloc = allocations.filter((a) => a.unit_id === selectedUnitId);
-    const mapping: Record<string, string> = {};
-    unitAlloc.forEach((a) => {
-      mapping[a.meter_id] = String(a.percentage);
-    });
-    setLocalAllocations(mapping);
-  }, [selectedUnitId, allocations]);
+  }, [sections, activeSectionId]);
 
-  // Load every remainder rule for the selected unit into local state
-  useEffect(() => {
-    if (!selectedUnitId) {
-      setLocalRemainderRules([]);
-      setDirtyRuleKeys(new Set());
-      return;
+  const sectionTabs = useMemo(() => {
+    const tabs = sections.map((sec) => {
+      const count = meters.filter((m) => m.section_id === sec.id).length;
+      return {
+        id: sec.id,
+        label: sec.name,
+        badge: count,
+      };
+    });
+    const uncategorizedCount = meters.filter((m) => !m.section_id).length;
+    if (uncategorizedCount > 0 && sections.length > 0) {
+      tabs.push({
+        id: '__uncategorized__',
+        label: 'Uncategorized',
+        badge: uncategorizedCount,
+      });
     }
-    const rules = remainderRules.filter((r) => r.unit_id === selectedUnitId);
-    setLocalRemainderRules(
-      rules.map((r) => ({
-        id: r.id,
-        localKey: r.id,
-        baseSourceMeterId: r.base_source_meter_id,
-        deductionMeterIds: r.deduction_meter_ids ?? [],
-        remainderSharePercent: Number(r.remainder_share_percent),
-      }))
-    );
-    setDirtyRuleKeys(new Set());
-  }, [selectedUnitId, remainderRules]);
+    return tabs;
+  }, [sections, meters]);
 
   const handleSort = (field: SortField) => {
     if (sortField === field) {
@@ -219,29 +267,41 @@ export default function SettingsPage() {
 
   const handleAddMeter = async (data: any) => {
     setMeterSubmitting(true);
-    const result = await addMeter(data);
-    if (result.success) {
-      addToast('success', result.message);
-      setMeterFormOpen(false);
-      fetchData();
-    } else {
-      addToast('error', result.message);
+    try {
+      const result = await addMeter(data);
+      if (result.success) {
+        addToast('success', result.message);
+        setMeterFormOpen(false);
+        fetchData();
+      } else {
+        addToast('error', result.message);
+      }
+    } catch (err: any) {
+      console.error('Failed to add meter:', err);
+      addToast('error', err?.message || 'Failed to add meter');
+    } finally {
+      setMeterSubmitting(false);
     }
-    setMeterSubmitting(false);
   };
 
   const handleUpdateMeter = async (data: any) => {
     if (!editingMeter) return;
     setMeterSubmitting(true);
-    const result = await updateMeter(editingMeter.id, data);
-    if (result.success) {
-      addToast('success', result.message);
-      setEditingMeter(null);
-      fetchData();
-    } else {
-      addToast('error', result.message);
+    try {
+      const result = await updateMeter(editingMeter.id, data);
+      if (result.success) {
+        addToast('success', result.message);
+        setEditingMeter(null);
+        fetchData();
+      } else {
+        addToast('error', result.message);
+      }
+    } catch (err: any) {
+      console.error('Failed to update meter:', err);
+      addToast('error', err?.message || 'Failed to update meter');
+    } finally {
+      setMeterSubmitting(false);
     }
-    setMeterSubmitting(false);
   };
 
   const handleDeleteMeter = async (meter: Meter) => {
@@ -274,6 +334,112 @@ export default function SettingsPage() {
       addToast('error', result.message);
     }
     setSectionCreating(false);
+  };
+
+  const openEditSection = (section: MeterSection) => {
+    setEditingSection(section);
+    setEditSectionName(section.name);
+    setEditSectionUnit(section.unit || 'kWh');
+  };
+
+  const handleUpdateSection = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingSection) return;
+    if (!editSectionName.trim()) {
+      addToast('error', 'Section name is required');
+      return;
+    }
+    setSectionUpdating(true);
+    const result = await updateMeterSection(editingSection.id, editSectionName.trim(), editSectionUnit.trim());
+    if (result.success) {
+      addToast('success', result.message);
+      setEditingSection(null);
+      fetchData();
+    } else {
+      addToast('error', result.message);
+    }
+    setSectionUpdating(false);
+  };
+
+  const openTierModal = () => {
+    setTempTierLabels(tierLabels);
+    setShowTierModal(true);
+  };
+
+  const handleSaveTierLabels = (e: React.FormEvent) => {
+    e.preventDefault();
+    setTierLabels(tempTierLabels);
+    try {
+      localStorage.setItem('utility_tier_labels', JSON.stringify(tempTierLabels));
+      window.dispatchEvent(new Event('utility_tier_labels_changed'));
+    } catch (e) {}
+    addToast('success', 'Hierarchy tier names updated successfully!');
+    setShowTierModal(false);
+  };
+
+  const handleResetTierLabels = () => {
+    setTempTierLabels(DEFAULT_TIER_LABELS);
+    setTierLabels(DEFAULT_TIER_LABELS);
+    try {
+      localStorage.removeItem('utility_tier_labels');
+      window.dispatchEvent(new Event('utility_tier_labels_changed'));
+    } catch (e) {}
+    addToast('success', 'Hierarchy tiers reset to defaults.');
+  };
+
+  // Distinct equipment categories in use across meters
+  const uniqueEquipmentCategories = useMemo(() => {
+    const counts = new Map<string, number>();
+    meters.forEach((m: any) => {
+      const cat = (m.energy_category || m.category || '').trim();
+      if (cat && cat.toLowerCase() !== 'general') {
+        counts.set(cat, (counts.get(cat) || 0) + 1);
+      }
+    });
+    return Array.from(counts.entries()).map(([name, count]) => ({ name, count }));
+  }, [meters]);
+
+  const handleRenameCategory = async (oldName: string, newName: string) => {
+    if (!newName.trim()) {
+      addToast('error', 'New category name is required');
+      return;
+    }
+    setCategoryActionLoading(true);
+    try {
+      const res = await renameEquipmentCategory(oldName, newName.trim());
+      if (res.success) {
+        addToast('success', res.message);
+        setCategoryRenameTarget(null);
+        setCategoryNewName('');
+        setManualOldCategory('');
+        setManualNewCategory('');
+        fetchData();
+      } else {
+        addToast('error', res.message);
+      }
+    } catch (err: any) {
+      addToast('error', err?.message || 'Failed to rename category');
+    } finally {
+      setCategoryActionLoading(false);
+    }
+  };
+
+  const handleDeleteCategory = async (catName: string) => {
+    if (!window.confirm(`Are you sure you want to clear category "${catName}" from all meters?`)) return;
+    setCategoryActionLoading(true);
+    try {
+      const res = await deleteEquipmentCategory(catName);
+      if (res.success) {
+        addToast('success', res.message);
+        fetchData();
+      } else {
+        addToast('error', res.message);
+      }
+    } catch (err: any) {
+      addToast('error', err?.message || 'Failed to clear category');
+    } finally {
+      setCategoryActionLoading(false);
+    }
   };
 
   const handleDeleteSection = async (section: MeterSection) => {
@@ -315,6 +481,7 @@ export default function SettingsPage() {
       .map((m) => m.id);
     setCollapsedMeterIds(new Set(parentIds));
   };
+
   const handleMoveMeterInList = async (
     list: Meter[],
     index: number,
@@ -348,1098 +515,1069 @@ export default function SettingsPage() {
     }
   };
 
+function DomainMeterBadge({ meter, domain, tierLabels }: { meter: Meter; domain: 'energy' | 'gas' | 'hour'; tierLabels?: CustomTierLabels }) {
+  const labels = tierLabels || DEFAULT_TIER_LABELS;
+  if (domain === 'hour') {
+    const grp = (meter as any).equipment_group || (meter as any).category || 'Other';
+    const label =
+      grp === 'Compressor' ? labels.hour_compressor || 'Compressor'
+      : grp === 'Pump' ? labels.hour_pump || 'Pump'
+      : grp === 'Generator' ? labels.hour_generator || 'Generator'
+      : labels.hour_other || 'Other Machinery';
+    const variant = grp === 'Compressor' ? 'accent' : grp === 'Pump' ? 'success' : grp === 'Generator' ? 'warning' : 'default';
+    return <Badge variant={variant}>{label}</Badge>;
+  }
+
+  if (domain === 'gas') {
+    if (meter.type === 'incoming' || meter.type === 'main') {
+      return <Badge variant="warning">{labels.gas_incoming || 'RMS Incomer'}</Badge>;
+    }
+    if (meter.type === 'outgoing_main' || meter.type === 'outgoing') {
+      return <Badge variant="accent">{labels.gas_outgoing_main || 'Gas Header'}</Badge>;
+    }
+    if (meter.type === 'outgoing_sub_sub') {
+      return <Badge variant="danger">{labels.gas_outgoing_sub_sub || 'Sub-Appliance'}</Badge>;
+    }
+    return <Badge variant="success">{labels.gas_outgoing_sub || 'Appliance Sub'}</Badge>;
+  }
+
+  // Energy
+  if (meter.type === 'incoming' || meter.type === 'main') {
+    return <Badge variant="warning">{labels.incoming || 'Incoming Feeder'}</Badge>;
+  }
+  if (meter.type === 'outgoing_main' || meter.type === 'outgoing') {
+    return <Badge variant="accent">{labels.outgoing_main || 'Mother Panel'}</Badge>;
+  }
+  if (meter.type === 'outgoing_sub_sub') {
+    return <Badge variant="danger">{labels.outgoing_sub_sub || 'Sub-Submeter'}</Badge>;
+  }
+  return <Badge variant="success">{labels.outgoing_sub || 'Breaker Submeter'}</Badge>;
+}
+
   const renderMeterRow = (
     meter: Meter,
-    isChild = false,
-    isGrandchild = false,
+    level = 0,
+    childCount = 0,
     idx = 0,
     siblingsCount = 1,
-    onMove?: (direction: 'up' | 'down') => void
+    onMove?: (direction: 'up' | 'down') => void,
+    domain: 'energy' | 'gas' | 'hour' = 'energy'
   ) => {
-    const children = getSubMetersForParent(meter.id);
-    const grandchildren = getSubSubMetersForParent(meter.id);
-    const childCount = children.length + grandchildren.length;
     const hasChildren = childCount > 0;
     const isCollapsed = collapsedMeterIds.has(meter.id);
+
+    const plClass =
+      level === 0 ? 'pl-2.5' :
+      level === 1 ? 'pl-6' :
+      level === 2 ? 'pl-10' :
+      'pl-14';
+
+    const branchPrefix =
+      level === 1 ? '└─ ' :
+      level === 2 ? '└─── ' :
+      level >= 3 ? '└───── ' :
+      '';
+
+    const branchColor =
+      level === 1 ? 'text-accent/80' :
+      level === 2 ? 'text-success/80' :
+      'text-danger/80';
 
     return (
       <tr
         key={meter.id}
-        className={`border-b border-border transition-colors hover:bg-bg-surface-hover ${
-          isGrandchild ? 'bg-bg-primary/60' : isChild ? 'bg-bg-primary/70' : idx % 2 === 0 ? 'bg-bg-surface' : 'bg-bg-primary/50'
+        className={`transition-colors hover:bg-bg-surface-hover/70 ${
+          level >= 2
+            ? 'bg-bg-primary/50'
+            : level === 1
+            ? 'bg-bg-primary/25'
+            : idx % 2 === 0
+            ? 'bg-transparent'
+            : 'bg-bg-surface-hover/15'
         }`}
       >
-        <td className={`px-3 py-2 font-medium ${isGrandchild ? 'pl-14 text-text-muted bg-bg-primary/60' : isChild ? 'pl-9 text-text-secondary bg-bg-primary/70' : idx % 2 === 0 ? 'text-text-primary bg-bg-surface' : 'text-text-primary bg-bg-primary/50'}`}>
-          <div className="flex items-center gap-2">
-            {isGrandchild && <span className="text-danger/70 font-mono text-xs">└─</span>}
-            {isChild && !isGrandchild && <span className="text-accent/70 font-mono text-xs">└─</span>}
+        <td
+          className={`sticky left-0 z-10 py-1.5 font-medium truncate backdrop-blur-xs ${plClass} ${
+            level > 0 ? 'bg-bg-elevated/95' : 'text-text-primary bg-bg-elevated/95'
+          }`}
+        >
+          <div className="flex items-center gap-1.5 min-w-0">
+            {level > 0 && (
+              <span className={`font-mono text-[11px] shrink-0 font-bold ${branchColor}`}>
+                {branchPrefix}
+              </span>
+            )}
 
             {hasChildren ? (
               <button
                 type="button"
                 onClick={() => toggleCollapse(meter.id)}
-                className="p-1 text-accent hover:bg-accent/10 rounded transition-all flex items-center gap-1 focus:outline-none"
-                title={isCollapsed ? "Expand submeters" : "Collapse submeters"}
+                className="p-0.5 text-accent hover:bg-accent/10 rounded transition-all flex items-center gap-1.5 focus:outline-none min-w-0 cursor-pointer"
+                title={isCollapsed ? 'Expand branch meters' : 'Collapse branch meters'}
               >
                 <svg
-                  width="14"
-                  height="14"
+                  width="12"
+                  height="12"
                   viewBox="0 0 24 24"
                   fill="none"
                   stroke="currentColor"
                   strokeWidth="2.5"
-                  className={`transition-transform duration-200 ${isCollapsed ? '-rotate-90 text-text-muted' : 'rotate-0 text-accent'}`}
+                  className={`shrink-0 transition-transform duration-200 ${
+                    isCollapsed ? '-rotate-90 text-text-muted' : 'rotate-0 text-accent'
+                  }`}
                 >
                   <polyline points="6 9 12 15 18 9" />
                 </svg>
-                <span>{meter.name}</span>
-                <span className="text-[11px] font-normal px-1.5 py-0.5 rounded-full bg-accent/15 text-accent">
-                  {childCount} sub
+                <span className="truncate text-xs font-semibold">{meter.name}</span>
+                <span className="text-[10px] font-normal px-1.5 py-0.2 rounded-full bg-accent/15 text-accent shrink-0">
+                  {childCount}
                 </span>
               </button>
             ) : (
-              <span>{meter.name}</span>
+              <span className={`truncate text-xs ${level === 0 ? 'font-medium text-text-primary' : 'text-text-secondary'}`}>
+                {meter.name}
+              </span>
             )}
           </div>
         </td>
-        <td className="px-3 py-2">
-          <MeterTypeBadge type={meter.type} />
+        <td className="px-2 py-1.5">
+          <DomainMeterBadge meter={meter} domain={domain} tierLabels={tierLabels} />
         </td>
-        <td className="px-3 py-2 text-text-secondary">{meter.location}</td>
-        <td className="px-3 py-2 font-medium text-accent">{getParentName(meter)}</td>
-        <td className="px-3 py-2 text-center font-bold tabular-nums text-accent">
-          {meter.multiplication_factor ?? 1}×
+        <td className="px-2 py-1.5 text-text-muted text-xs truncate" title={meter.location}>
+          {meter.location || '—'}
         </td>
-        <td className="px-3 py-2 text-right">
-          <div className="flex items-center justify-end gap-1.5">
-            {onMove && (
-              <div className="flex items-center gap-0.5 mr-1">
+        <td className="px-2 py-1.5 text-xs text-accent font-medium truncate" title={getParentName(meter)}>
+          {getParentName(meter)}
+        </td>
+        <td className="px-1.5 py-1.5 text-center font-bold tabular-nums text-accent text-xs">
+          {(() => {
+            const v = meter.multiplication_factor ?? 1;
+            const intPart = Math.floor(Math.abs(v));
+            const fracPart = Math.abs(v) - intPart;
+            const sign = v < 0 ? '-' : '';
+            return '×' + sign + String(intPart).padStart(3, '0') + '.' + fracPart.toFixed(2).slice(2);
+          })()}
+        </td>
+        <td className="px-2 py-1.5 text-right">
+          <div className="relative inline-block" ref={openMenuMeterId === meter.id ? menuRef : undefined}>
+            <button
+              type="button"
+              onClick={() => setOpenMenuMeterId(openMenuMeterId === meter.id ? null : meter.id)}
+              className="w-6 h-6 flex items-center justify-center text-text-muted hover:text-text-primary hover:bg-bg-surface-hover rounded transition-colors cursor-pointer"
+              title="Actions"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                <circle cx="12" cy="5" r="2" />
+                <circle cx="12" cy="12" r="2" />
+                <circle cx="12" cy="19" r="2" />
+              </svg>
+            </button>
+            {openMenuMeterId === meter.id && (
+              <div className="absolute right-0 top-full mt-1 z-50 min-w-[150px] bg-bg-elevated border border-border/80 rounded-[var(--radius-md)] shadow-lg py-1 animate-fade-in">
+                {/* Edit */}
                 <button
                   type="button"
-                  disabled={idx === 0}
-                  onClick={() => onMove('up')}
-                  className="text-text-muted hover:text-accent hover:bg-accent/10 disabled:opacity-30 disabled:pointer-events-none p-1.5 rounded-md transition-colors"
-                  title="Move Up"
+                  onClick={() => { setEditingMeter(meter); setOpenMenuMeterId(null); }}
+                  className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-text-secondary hover:bg-accent/10 hover:text-accent transition-colors cursor-pointer"
                 >
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                    <polyline points="18 15 12 9 6 15" />
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
+                    <path d="M12 20h9" />
+                    <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
                   </svg>
+                  Edit
                 </button>
+                {/* Move Up */}
+                {onMove && (
+                  <button
+                    type="button"
+                    disabled={idx === 0}
+                    onClick={() => { onMove('up'); setOpenMenuMeterId(null); }}
+                    className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-text-secondary hover:bg-accent/10 hover:text-accent disabled:opacity-30 disabled:pointer-events-none transition-colors cursor-pointer"
+                  >
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="shrink-0">
+                      <polyline points="18 15 12 9 6 15" />
+                    </svg>
+                    Move Up
+                  </button>
+                )}
+                {/* Move Down */}
+                {onMove && (
+                  <button
+                    type="button"
+                    disabled={idx === siblingsCount - 1}
+                    onClick={() => { onMove('down'); setOpenMenuMeterId(null); }}
+                    className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-text-secondary hover:bg-accent/10 hover:text-accent disabled:opacity-30 disabled:pointer-events-none transition-colors cursor-pointer"
+                  >
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="shrink-0">
+                      <polyline points="6 9 12 15 18 9" />
+                    </svg>
+                    Move Down
+                  </button>
+                )}
+                {/* Divider */}
+                <div className="my-1 border-t border-border/50" />
+                {/* Delete */}
                 <button
                   type="button"
-                  disabled={idx === siblingsCount - 1}
-                  onClick={() => onMove('down')}
-                  className="text-text-muted hover:text-accent hover:bg-accent/10 disabled:opacity-30 disabled:pointer-events-none p-1.5 rounded-md transition-colors"
-                  title="Move Down"
+                  onClick={() => { handleDeleteMeter(meter); setOpenMenuMeterId(null); }}
+                  className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-danger hover:bg-danger/10 transition-colors cursor-pointer"
                 >
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                    <polyline points="6 9 12 15 18 9" />
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
+                    <polyline points="3 6 5 6 21 6" />
+                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
                   </svg>
+                  Delete
                 </button>
               </div>
             )}
-            <button
-              type="button"
-              onClick={() => setEditingMeter(meter)}
-              className="text-accent/80 hover:text-accent bg-accent/10 hover:bg-accent/20 p-1.5 rounded-md transition-colors"
-              title="Edit Meter"
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M12 20h9" />
-                <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
-              </svg>
-            </button>
-            <button
-              type="button"
-              onClick={() => handleDeleteMeter(meter)}
-              className="text-danger/80 hover:text-danger bg-danger/10 hover:bg-danger/20 p-1.5 rounded-md transition-colors"
-              title="Delete Meter"
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="3 6 5 6 21 6" />
-                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-              </svg>
-            </button>
           </div>
         </td>
       </tr>
     );
   };
 
-  // ─── Unit Tab Helpers & Logic ───
-  const outgoingMetersOnly = useMemo(() => {
-    return meters.filter((m) => {
-      const isOutgoingType =
-        m.type === 'outgoing_main' ||
-        m.type === 'outgoing' ||
-        m.type === 'outgoing_sub' ||
-        m.type === 'submeter' ||
-        m.type === 'outgoing_sub_sub';
-      if (!isOutgoingType) return false;
-
-      // Only include meters belonging to a KW (kWh/Energy) section
-      const section = sections.find((s) => s.id === m.section_id);
-      const isKwMeter = !!section?.unit?.trim().toLowerCase().startsWith('kw');
-      if (!isKwMeter) return false;
-
-      // Exclude meters whose location is 'NA'
-      if (m.location?.trim().toUpperCase() === 'NA') return false;
-
-      return true;
-    });
-  }, [meters, sections]);
-
-  const meterTotalAllocations = useMemo(() => {
-    const totals: Record<string, number> = {};
-    allocations.forEach((a) => {
-      if (a.unit_id !== selectedUnitId) {
-        totals[a.meter_id] = (totals[a.meter_id] || 0) + Number(a.percentage);
-      }
-    });
-    return totals;
-  }, [allocations, selectedUnitId]);
-
-  // Tree Helper Functions
-  const getRootMeterId = useCallback((meterId: string): string => {
-    let current = meterMap.get(meterId);
-    while (current?.parent_meter_id) {
-      const parent = meterMap.get(current.parent_meter_id);
-      if (!parent) break;
-      current = parent;
-    }
-    return current?.id || meterId;
-  }, [meterMap]);
-
-  const getDescendantIds = useCallback((parentId: string): string[] => {
-    const descendants: string[] = [];
-    const queue = [parentId];
-    while (queue.length > 0) {
-      const currentId = queue.shift()!;
-      const children = meters.filter((m) => m.parent_meter_id === currentId);
-      children.forEach((c) => {
-        descendants.push(c.id);
-        queue.push(c.id);
-      });
-    }
-    return descendants;
-  }, [meters]);
-
-  const getTreeMeterIds = useCallback((meterId: string): string[] => {
-    const rootId = getRootMeterId(meterId);
-    return [rootId, ...getDescendantIds(rootId)];
-  }, [getRootMeterId, getDescendantIds]);
-
-  const getTreeTotalAllocated = useCallback((meterId: string, currentEdits: Record<string, string>) => {
-    const treeIds = getTreeMeterIds(meterId);
-    let total = 0;
-    treeIds.forEach((id) => {
-      if (currentEdits[id] !== undefined) {
-        total += parseFloat(currentEdits[id]) || 0;
-      } else {
-        const savedThisUnit = allocations.find((a) => a.unit_id === selectedUnitId && a.meter_id === id);
-        total += savedThisUnit ? Number(savedThisUnit.percentage) : 0;
-      }
-      total += meterTotalAllocations[id] || 0;
-    });
-    return total;
-  }, [getTreeMeterIds, allocations, selectedUnitId, meterTotalAllocations]);
-
-  const handleCreateUnit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newUnitName.trim()) return;
-
-    setUnitCreating(true);
-    const res = await addUnit(newUnitName.trim());
-    if (res.success) {
-      addToast('success', res.message);
-      setNewUnitName('');
-      fetchData();
-    } else {
-      addToast('error', res.message);
-    }
-    setUnitCreating(false);
-  };
-
-  const handleDeleteUnit = async (unit: Unit) => {
-    const confirmed = window.confirm(
-      `Are you sure you want to delete "${unit.name}"? All associated meter allocations will be removed.`
-    );
-    if (!confirmed) return;
-
-    const res = await deleteUnit(unit.id);
-    if (res.success) {
-      addToast('success', res.message);
-      if (selectedUnitId === unit.id) {
-        setSelectedUnitId('');
-      }
-      fetchData();
-    } else {
-      addToast('error', res.message);
-    }
-  };
-
-  const handleMoveUnit = async (index: number, direction: 'up' | 'down') => {
-    const newUnits = [...units];
-    const targetIndex = direction === 'up' ? index - 1 : index + 1;
-    if (targetIndex < 0 || targetIndex >= newUnits.length) return;
-
-    // Swap elements
-    const temp = newUnits[index];
-    newUnits[index] = newUnits[targetIndex];
-    newUnits[targetIndex] = temp;
-
-    // Optimistic update
-    setUnits(newUnits);
-
-    // Persist backend
-    const orderedIds = newUnits.map((u) => u.id);
-    const res = await updateUnitsOrder(orderedIds);
-    if (!res.success) {
-      addToast('error', res.message);
-      // Re-fetch to roll back
-      fetchData();
-    }
-  };
-
-  const handlePercentageChange = (meterId: string, val: string) => {
-    setLocalAllocations((prev) => ({
-      ...prev,
-      [meterId]: val,
-    }));
-  };
-
-  const handleSaveAllocations = async () => {
-    if (!selectedUnitId) return;
-
-    const formatted: { meter_id: string; percentage: number }[] = [];
-    let hasValidationError = false;
-
-    // 1. Basic validation (value bounds)
-    Object.entries(localAllocations).forEach(([meterId, val]) => {
-      if (!val || val.trim() === '' || Number(val) === 0) return;
-
-      const pct = parseFloat(val);
-      if (isNaN(pct) || pct < 0 || pct > 100) {
-        addToast('error', 'Percentages must be between 0 and 100');
-        hasValidationError = true;
-        return;
-      }
-    });
-
-    if (hasValidationError) return;
-
-    // Validate individual meter allocations first to prevent any single meter crossing 100%
-    for (const meter of meters) {
-      const otherPct = meterTotalAllocations[meter.id] || 0;
-      const localVal = localAllocations[meter.id] || '';
-      const localPct = parseFloat(localVal) || 0;
-      const totalPct = otherPct + localPct;
-
-      if (totalPct > 100) {
-        addToast(
-          'error',
-          `Total allocation for meter "${meter.name}" cannot exceed 100% (currently ${totalPct}%)`
-        );
-        hasValidationError = true;
-        break;
-      }
-    }
-
-    if (hasValidationError) return;
-
-    // 2. Build local draft view of all allocations to validate subtree sums
-    const draftAllocations: Record<string, number> = {};
-    // Populate with existing allocations of other units
-    Object.entries(meterTotalAllocations).forEach(([meterId, val]) => {
-      draftAllocations[meterId] = val;
-    });
-    // Overlay local edits
-    Object.entries(localAllocations).forEach(([meterId, val]) => {
-      const pct = parseFloat(val) || 0;
-      if (pct > 0) {
-        draftAllocations[meterId] = pct;
-      } else {
-        delete draftAllocations[meterId];
-      }
-    });
-
-    // Validate that for every meter, its tree total sum <= 100%
-    for (const meter of meters) {
-      const rootId = getRootMeterId(meter.id);
-      const treeIds = [rootId, ...getDescendantIds(rootId)];
-      let treeSum = 0;
-      treeIds.forEach((id) => {
-        treeSum += draftAllocations[id] || 0;
-      });
-
-      if (treeSum > 100) {
-        const rootMeter = meterMap.get(rootId);
-        addToast(
-          'error',
-          `Total allocations under tree "${rootMeter?.name || 'Meter'}" exceed 100% (currently ${treeSum}%)`
-        );
-        hasValidationError = true;
-        break;
-      }
-    }
-
-    if (hasValidationError) return;
-
-    // Build format rows to save
-    Object.entries(localAllocations).forEach(([meterId, val]) => {
-      if (!val || val.trim() === '' || Number(val) === 0) return;
-      formatted.push({ meter_id: meterId, percentage: parseFloat(val) });
-    });
-
-    setUnitSaving(true);
-    const res = await updateUnitAllocations(selectedUnitId, formatted);
-    if (res.success) {
-      addToast('success', res.message);
-      fetchData();
-    } else {
-      addToast('error', res.message);
-    }
-    setUnitSaving(false);
-  };
-
-  function handleAddRemainderRule() {
-    const localKey = `new-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-    setLocalRemainderRules((prev) => [
-      ...prev,
-      { localKey, baseSourceMeterId: null, deductionMeterIds: [], remainderSharePercent: 100 },
-    ]);
-    setDirtyRuleKeys((prev) => new Set(prev).add(localKey));
-  }
-
-  function updateLocalRule(localKey: string, patch: Partial<RemainderRuleValue>) {
-    setLocalRemainderRules((prev) =>
-      prev.map((r) => (r.localKey === localKey ? { ...r, ...patch } : r))
-    );
-    setDirtyRuleKeys((prev) => new Set(prev).add(localKey));
-  }
-
-  async function handleSaveRemainderRule(localKey: string) {
-    const rule = localRemainderRules.find((r) => r.localKey === localKey);
-    if (!rule || !selectedUnitId) return;
-
-    if (!rule.baseSourceMeterId) {
-      addToast('error', 'Select a Base Source meter first.');
-      return;
-    }
-    const pct = rule.remainderSharePercent;
-    if (Number.isNaN(pct) || pct < 0 || pct > 100) {
-      addToast('error', 'Remainder Share % must be between 0 and 100.');
-      return;
-    }
-
-    setSavingRuleKey(localKey);
-    const payload = {
-      base_source_meter_id: rule.baseSourceMeterId,
-      deduction_meter_ids: rule.deductionMeterIds,
-      remainder_share_percent: pct,
-    };
-    const res = rule.id
-      ? await updateUnitRemainderRule(rule.id, payload)
-      : await addUnitRemainderRule(selectedUnitId, payload);
-
-    if (res.success) {
-      addToast('success', res.message);
-      setDirtyRuleKeys((prev) => {
-        const next = new Set(prev);
-        next.delete(localKey);
-        return next;
-      });
-      fetchData();
-    } else {
-      addToast('error', res.message);
-    }
-    setSavingRuleKey(null);
-  }
-
-  async function handleDeleteRemainderRule(localKey: string) {
-    const rule = localRemainderRules.find((r) => r.localKey === localKey);
-    if (!rule) return;
-
-    // Never-saved rule — just drop it locally, no server call needed.
-    if (!rule.id) {
-      setLocalRemainderRules((prev) => prev.filter((r) => r.localKey !== localKey));
-      setDirtyRuleKeys((prev) => {
-        const next = new Set(prev);
-        next.delete(localKey);
-        return next;
-      });
-      return;
-    }
-
-    setSavingRuleKey(localKey);
-    const res = await deleteUnitRemainderRule(rule.id);
-    if (res.success) {
-      addToast('success', res.message);
-      fetchData();
-    } else {
-      addToast('error', res.message);
-    }
-    setSavingRuleKey(null);
-  }
-
-  const selectedUnit = units.find((u) => u.id === selectedUnitId);
-
-  // ─── Calculated Remainder: candidate meter pools ───
-  const remainderBaseSourceOptions = useMemo(
-    () => meters.filter((m) => !m.parent_meter_id),
-    [meters]
-  );
-
-  function deductionCandidatesFor(rule: RemainderRuleValue): Meter[] {
-    if (!rule.baseSourceMeterId) return [];
-    const descendantIds = new Set(getDescendantIds(rule.baseSourceMeterId));
-    return meters.filter((m) => descendantIds.has(m.id) && !rule.deductionMeterIds.includes(m.id));
-  }
-
   return (
-    <div className="max-w-6xl mx-auto space-y-6">
+    <div className="max-w-7xl mx-auto animate-fade-in space-y-4">
       {/* Page Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-1 border-b border-border/40">
         <div>
           <h1 className="text-xl sm:text-2xl font-bold text-text-primary">System Settings</h1>
-          <p className="text-sm text-text-secondary mt-1">
-            Configure incoming power feeders, mother panels, submeter hierarchy, and define Major Unit consumption allocations
+          <p className="text-xs text-text-muted mt-0.5">
+            Configure incoming power feeders, mother panels, and submeter hierarchy
           </p>
         </div>
- 
-      </div>
 
-      {/* Tabs */}
-      <div className="flex border-b border-border overflow-x-auto">
-        <button
-          onClick={() => setActiveTab('meters')}
-          className={`py-2.5 px-4 font-semibold text-sm transition-all border-b-2 -mb-px whitespace-nowrap ${
-            activeTab === 'meters'
-              ? 'border-accent text-accent'
-              : 'border-transparent text-text-secondary hover:text-text-primary'
-          }`}
-        >
-          Meters Configuration
-        </button>
-        <button
-          onClick={() => setActiveTab('units')}
-          className={`py-2.5 px-4 font-semibold text-sm transition-all border-b-2 -mb-px whitespace-nowrap ${
-            activeTab === 'units'
-              ? 'border-accent text-accent'
-              : 'border-transparent text-text-secondary hover:text-text-primary'
-          }`}
-        >
-          Major Units &amp; Allocations
-        </button>
+        <div className="flex flex-wrap items-center gap-1.5">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={openTierModal}
+            className="text-xs"
+            title="Edit feeder hierarchy tiers, run hours machinery groups, and equipment categories"
+          >
+            Edit Category
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setShowSectionForm(true)}
+            className="text-xs"
+          >
+            + Add Section
+          </Button>
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={() => setMeterFormOpen(true)}
+            className="text-xs"
+          >
+            + Add Meter
+          </Button>
+        </div>
       </div>
 
       {loading ? (
         <div className="flex items-center justify-center py-16">
-          <div className="w-8 h-8 border-2 border-accent border-t-transparent rounded-full animate-spin" />
+          <div className="w-6 h-6 border-2 border-accent border-t-transparent rounded-full animate-spin" />
         </div>
-      ) : activeTab === 'meters' ? (
-        /* METERS MANAGEMENT TAB */
+      ) : (
         <div className="space-y-4">
- 
+          {/* Section Tabs & Quick Rename */}
+          <div className="flex items-center justify-between gap-2 flex-wrap mb-1">
+            {sectionTabs.length > 0 && (
+              <Tabs
+                tabs={sectionTabs}
+                activeTab={activeSectionId || (sections[0]?.id ?? '')}
+                onChange={(id) => setActiveSectionId(id)}
+                className="mb-0 flex-1 min-w-[280px]"
+              />
+            )}
+            {activeSection && activeSectionId !== '__uncategorized__' && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => openEditSection(activeSection)}
+                className="text-xs h-8 shrink-0 text-accent hover:bg-accent/10 border-accent/30"
+                title="Rename this section/category tab"
+              >
+                Rename Tab
+              </Button>
+            )}
+          </div>
 
-          {/* Separate Table Cards per Section */}
+          {/* Main Table Content */}
           {meters.length === 0 ? (
-            <Card className="text-center py-16 text-text-muted">
-              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="mx-auto mb-3 opacity-40">
+            <div className="text-center py-12 border border-border/80 rounded-[var(--radius-md)] bg-bg-elevated text-text-muted shadow-xs">
+              <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="mx-auto mb-2 opacity-40">
                 <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
               </svg>
-              <p className="text-sm font-medium">No meters configured yet</p>
-              <p className="text-xs mt-1">Add your first meter to get started</p>
-            </Card>
+              <p className="text-xs font-semibold text-text-primary">No meters configured yet</p>
+              <p className="text-[11px] text-text-muted mt-0.5">Add your first meter or section to get started</p>
+              <div className="flex items-center justify-center gap-2 mt-3">
+                <Button variant="outline" size="sm" onClick={() => setShowSectionForm(true)} className="text-xs">
+                  + Add Section
+                </Button>
+                <Button variant="primary" size="sm" onClick={() => setMeterFormOpen(true)} className="text-xs">
+                  + Add Meter
+                </Button>
+              </div>
+            </div>
           ) : sections.length > 0 ? (
-            <div className="space-y-6">
-              {sections.map((sec) => {
-                const secMeters = meters.filter((m) => m.section_id === sec.id);
+            <div className="space-y-4">
+              {activeSectionId !== '__uncategorized__' &&
+                sections
+                  .filter((sec) => sec.id === (activeSectionId || sections[0]?.id))
+                  .map((sec) => {
+                    const secMeters = meters.filter((m) => m.section_id === sec.id);
+                    const domain = getSectionDomain(sec);
+                    const secMeterIds = new Set(secMeters.map((m) => m.id));
 
-                const secIncomingMeters = sortMetersList(
-                  secMeters.filter((m) => m.type === 'incoming' || m.type === 'main')
-                );
-                const secMotherMeters = sortMetersList(
-                  secMeters.filter((m) => m.type === 'outgoing_main' || m.type === 'outgoing')
-                );
-                const secSubMeters = sortMetersList(
-                  secMeters.filter((m) => m.type === 'outgoing_sub' || m.type === 'submeter')
-                );
-                const secSubSubMeters = sortMetersList(
-                  secMeters.filter((m) => m.type === 'outgoing_sub_sub')
-                );
+                    // Recursive node renderer for hierarchical tree structures (Gas and Electricity)
+                    const renderMeterNode = (meter: Meter, level = 0, siblings: Meter[], idx: number) => {
+                      const children = sortMetersList(secMeters.filter((m) => m.parent_meter_id === meter.id));
+                      const isCollapsed = collapsedMeterIds.has(meter.id);
 
-                const getSecSubMetersForParent = (parentId: string) =>
-                  secSubMeters.filter((m) => m.parent_meter_id === parentId);
+                      return (
+                        <React.Fragment key={meter.id}>
+                          {renderMeterRow(
+                            meter,
+                            level,
+                            children.length,
+                            idx,
+                            siblings.length,
+                            (dir) => handleMoveMeterInList(siblings, idx, dir),
+                            domain
+                          )}
+                          {!isCollapsed &&
+                            children.map((child, cIdx) =>
+                              renderMeterNode(child, level + 1, children, cIdx)
+                            )}
+                        </React.Fragment>
+                      );
+                    };
 
-                const getSecSubSubMetersForParent = (parentId: string) =>
-                  secSubSubMeters.filter((m) => m.parent_meter_id === parentId);
+                    // Feeder / RMS Root meters (incoming)
+                    const incomingRoots = sortMetersList(
+                      secMeters.filter((m) => m.type === 'incoming' || m.type === 'main')
+                    );
 
-                const secUnassignedSubMeters = secSubMeters.filter(
-                  (m) => !m.parent_meter_id || !meterMap.has(m.parent_meter_id)
-                );
-                const secUnassignedSubSubMeters = secSubSubMeters.filter(
-                  (m) => !m.parent_meter_id || !meterMap.has(m.parent_meter_id)
-                );
+                    // Standalone Mother Panels / Headers that are NOT children of incoming meters in this section
+                    const standaloneMotherRoots = sortMetersList(
+                      secMeters.filter(
+                        (m) =>
+                          (m.type === 'outgoing_main' || m.type === 'outgoing') &&
+                          (!m.parent_meter_id || !secMeterIds.has(m.parent_meter_id))
+                      )
+                    );
 
-                return (
-                  <Card key={sec.id} className="p-0 overflow-hidden border border-border/80 shadow-sm">
-                    {/* Section Header Bar */}
-                    <div className="px-5 py-3.5 bg-bg-elevated border-b border-border flex items-center justify-between flex-wrap gap-2">
-                      <div className="flex items-center gap-2.5">
-                        <span className="text-xl">{sec.icon}</span>
-                        <h2 className="text-base font-bold text-text-primary">{sec.name}</h2>
-                        <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-accent/15 text-accent border border-accent/20">
-                          {secMeters.length} {secMeters.length === 1 ? 'Meter' : 'Meters'}
-                        </span>
-                      </div>
+                    // Unassigned Submeters (submeters whose parent is missing or not in this section)
+                    const unassignedSubMeters = sortMetersList(
+                      secMeters.filter(
+                        (m) =>
+                          (m.type === 'outgoing_sub' || m.type === 'outgoing_sub_sub' || m.type === 'submeter') &&
+                          (!m.parent_meter_id || !secMeterIds.has(m.parent_meter_id))
+                      )
+                    );
 
-                      <div className="flex items-center gap-2">
-                        {secMeters.length > 0 && (
-                          <div className="flex items-center gap-1 text-xs">
+                    // Hour meter machinery equipment groups
+                    const hourGroups: { key: HourEquipmentGroup; label: string }[] = [
+                      { key: 'Compressor', label: tierLabels.hour_compressor || 'Air Compressors' },
+                      { key: 'Pump', label: tierLabels.hour_pump || 'Pumps & Circulation Systems' },
+                      { key: 'Generator', label: tierLabels.hour_generator || 'Generators (Engine Run Hours)' },
+                      { key: 'Other', label: tierLabels.hour_other || 'Other Machinery & Auxiliaries' },
+                    ];
+
+                    return (
+                      <div key={sec.id} className="border border-border/80 rounded-[var(--radius-md)] bg-bg-elevated shadow-xs overflow-hidden">
+                        {/* Sleek Top Toolbar */}
+                        <div className="px-3 py-1.5 bg-bg-surface-hover/50 border-b border-border flex items-center justify-between flex-wrap gap-2">
+                          <div className="flex items-center gap-2">
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-accent/15 text-accent">
+                              {secMeters.length} {secMeters.length === 1 ? 'Meter' : 'Meters'}
+                            </span>
+                            <span className="text-[10px] text-text-muted">
+                              • Unit: <span className="font-medium text-text-secondary">{sec.unit || 'kWh'}</span>
+                            </span>
+                            <span className="text-[10px] text-text-muted font-medium bg-bg-surface px-1.5 py-0.5 rounded border border-border/40">
+                              {domain === 'hour' ? 'Run Hours' : domain === 'gas' ? 'Gas Hierarchy' : 'Energy Hierarchy'}
+                            </span>
+                          </div>
+
+                          <div className="flex items-center gap-1.5">
+                            {secMeters.length > 0 && domain !== 'hour' && (
+                              <div className="flex items-center gap-1 text-[11px]">
+                                <button
+                                  type="button"
+                                  onClick={expandAllMeters}
+                                  className="px-2 py-0.5 rounded bg-bg-surface hover:bg-bg-surface-hover text-accent font-medium transition-colors border border-border/60 cursor-pointer"
+                                  title="Expand all branches"
+                                >
+                                  ▼ Expand All
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={collapseAllMeters}
+                                  className="px-2 py-0.5 rounded bg-bg-surface hover:bg-bg-surface-hover text-text-secondary font-medium transition-colors border border-border/60 cursor-pointer"
+                                  title="Collapse all branches"
+                                >
+                                  ► Collapse All
+                                </button>
+                              </div>
+                            )}
                             <button
                               type="button"
-                              onClick={expandAllMeters}
-                              className="px-2 py-1 rounded bg-bg-surface hover:bg-bg-surface-hover text-accent font-medium transition-colors border border-border/60"
-                              title="Expand all rows"
+                              onClick={() => openEditSection(sec)}
+                              className="text-text-muted hover:text-accent p-1 rounded hover:bg-accent/10 transition-colors cursor-pointer"
+                              title="Edit / Rename Section"
                             >
-                              ▼ Expand All
+                              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M12 20h9" />
+                                <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
+                              </svg>
                             </button>
                             <button
                               type="button"
-                              onClick={collapseAllMeters}
-                              className="px-2 py-1 rounded bg-bg-surface hover:bg-bg-surface-hover text-text-secondary font-medium transition-colors border border-border/60"
-                              title="Collapse all rows"
+                              onClick={() => handleDeleteSection(sec)}
+                              className="text-text-muted hover:text-danger p-1 rounded hover:bg-danger/10 transition-colors cursor-pointer"
+                              title="Delete Section"
                             >
-                              ► Collapse All
+                              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <polyline points="3 6 5 6 21 6" />
+                                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                              </svg>
                             </button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setMeterFormOpen(true)}
+                              className="text-xs h-7 px-2"
+                            >
+                              + Add Meter
+                            </Button>
+                          </div>
+                        </div>
+
+                        {/* Section Table Body */}
+                        {secMeters.length === 0 ? (
+                          <div className="text-center py-8 px-4 text-text-muted">
+                            <p className="text-xs font-medium text-text-secondary">No meters in {sec.name} section yet.</p>
+                            <p className="text-[11px] mt-0.5 text-text-muted">
+                              Click &ldquo;+ Add Meter&rdquo; to configure meters under this section.
+                            </p>
+                          </div>
+                        ) : (
+                          <div className="overflow-x-auto max-h-[65vh]">
+                            <table className="w-full text-xs border-collapse table-fixed min-w-[760px]">
+                              <colgroup>
+                                <col className="w-[220px] sm:w-[260px]" />
+                                <col className="w-[120px]" />
+                                <col className="w-[120px]" />
+                                <col className="w-[130px]" />
+                                <col className="w-[70px]" />
+                                <col className="w-[90px]" />
+                              </colgroup>
+                              <thead className="bg-table-header text-[10px] font-bold uppercase tracking-wider text-white border-b border-border select-none sticky top-0 z-20">
+                                <tr>
+                                  <th className="sticky left-0 z-30 bg-table-header px-2.5 py-1.5 text-left text-white border-none">
+                                    <button
+                                      type="button"
+                                      onClick={() => handleSort('name')}
+                                      className={`inline-flex items-center gap-1 hover:text-accent transition-colors cursor-pointer bg-transparent border-0 border-none outline-none shadow-none focus:outline-none focus:ring-0 text-[10px] font-bold uppercase tracking-wider ${sortField === 'name' ? 'text-accent' : 'text-white'}`}
+                                    >
+                                      Meter Name {sortField === 'name' && (sortDirection === 'asc' ? '↑' : '↓')}
+                                    </button>
+                                  </th>
+                                  <th className="px-2 py-1.5 text-left text-white border-none">
+                                    <button
+                                      type="button"
+                                      onClick={() => handleSort('category')}
+                                      className={`inline-flex items-center gap-1 hover:text-accent transition-colors cursor-pointer bg-transparent border-0 border-none outline-none shadow-none focus:outline-none focus:ring-0 text-[10px] font-bold uppercase tracking-wider ${sortField === 'category' ? 'text-accent' : 'text-white'}`}
+                                    >
+                                      {domain === 'hour' ? 'Group / Type' : domain === 'gas' ? 'Gas Category' : 'Feeder Category'} {sortField === 'category' && (sortDirection === 'asc' ? '↑' : '↓')}
+                                    </button>
+                                  </th>
+                                  <th className="px-2 py-1.5 text-left text-white border-none">
+                                    <button
+                                      type="button"
+                                      onClick={() => handleSort('location')}
+                                      className={`inline-flex items-center gap-1 hover:text-accent transition-colors cursor-pointer bg-transparent border-0 border-none outline-none shadow-none focus:outline-none focus:ring-0 text-[10px] font-bold uppercase tracking-wider ${sortField === 'location' ? 'text-accent' : 'text-white'}`}
+                                    >
+                                      Location {sortField === 'location' && (sortDirection === 'asc' ? '↑' : '↓')}
+                                    </button>
+                                  </th>
+                                  <th className="px-2 py-1.5 text-left text-white border-none">
+                                    <button
+                                      type="button"
+                                      onClick={() => handleSort('parent')}
+                                      className={`inline-flex items-center gap-1 hover:text-accent transition-colors cursor-pointer bg-transparent border-0 border-none outline-none shadow-none focus:outline-none focus:ring-0 text-[10px] font-bold uppercase tracking-wider ${sortField === 'parent' ? 'text-accent' : 'text-white'}`}
+                                    >
+                                      {domain === 'hour' ? 'Application' : domain === 'gas' ? 'Parent (Header / RMS)' : 'Parent (Mother Panel)'} {sortField === 'parent' && (sortDirection === 'asc' ? '↑' : '↓')}
+                                    </button>
+                                  </th>
+                                  <th className="px-1.5 py-1.5 text-center text-white border-none">
+                                    <button
+                                      type="button"
+                                      onClick={() => handleSort('mf')}
+                                      className={`inline-flex items-center gap-1 hover:text-accent transition-colors cursor-pointer bg-transparent border-0 border-none outline-none shadow-none focus:outline-none focus:ring-0 text-[10px] font-bold uppercase tracking-wider ${sortField === 'mf' ? 'text-accent' : 'text-white'}`}
+                                    >
+                                      M.F {sortField === 'mf' && (sortDirection === 'asc' ? '↑' : '↓')}
+                                    </button>
+                                  </th>
+                                  <th className="px-2 py-1.5 text-right text-white border-none">Actions</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-border/60">
+                                {domain === 'hour' ? (
+                                  /* Run Hours Machinery layout grouped by equipment_group */
+                                  hourGroups.map((grp) => {
+                                    const groupMeters = sortMetersList(
+                                      secMeters.filter((m) => {
+                                        const rawGroup = (m as any).equipment_group || (m as any).category;
+                                        if (grp.key === 'Other') {
+                                          return !rawGroup || !['Compressor', 'Pump', 'Generator'].includes(rawGroup);
+                                        }
+                                        return rawGroup === grp.key;
+                                      })
+                                    );
+                                    if (groupMeters.length === 0) return null;
+
+                                    return (
+                                      <React.Fragment key={grp.key}>
+                                        <tr className="bg-accent/10 border-y border-accent/20">
+                                          <td colSpan={6} className="px-2.5 py-1 font-bold text-accent text-[10px] uppercase tracking-wider">
+                                            {grp.label} ({groupMeters.length})
+                                          </td>
+                                        </tr>
+                                        {groupMeters.map((m, idx) =>
+                                          renderMeterRow(
+                                            m,
+                                            0,
+                                            0,
+                                            idx,
+                                            groupMeters.length,
+                                            (dir) => handleMoveMeterInList(groupMeters, idx, dir),
+                                            domain
+                                          )
+                                        )}
+                                      </React.Fragment>
+                                    );
+                                  })
+                                ) : (
+                                  /* Hierarchical Tree for Gas and Electricity */
+                                  <>
+                                    {/* Incoming Feeders / RMS Feeders */}
+                                    {incomingRoots.length > 0 && (
+                                      <>
+                                        <tr className="bg-warning/10 border-y border-warning/20">
+                                          <td colSpan={6} className="px-2.5 py-1 font-bold text-warning text-[10px] uppercase tracking-wider">
+                                            {domain === 'gas' ? 'RMS Room / Main Incomers' : 'Incoming Feeders & Sources'} ({incomingRoots.length})
+                                          </td>
+                                        </tr>
+                                        {incomingRoots.map((root, idx) =>
+                                          renderMeterNode(root, 0, incomingRoots, idx)
+                                        )}
+                                      </>
+                                    )}
+
+                                    {/* Standalone Mother Panels / Headers */}
+                                    {standaloneMotherRoots.length > 0 && (
+                                      <>
+                                        <tr className="bg-accent/10 border-y border-accent/20">
+                                          <td colSpan={6} className="px-2.5 py-1 font-bold text-accent text-[10px] uppercase tracking-wider">
+                                            {domain === 'gas' ? 'Standalone Distribution Headers' : 'Standalone Mother Panels & Feeder Trees'} ({standaloneMotherRoots.length})
+                                          </td>
+                                        </tr>
+                                        {standaloneMotherRoots.map((root, idx) =>
+                                          renderMeterNode(root, 0, standaloneMotherRoots, idx)
+                                        )}
+                                      </>
+                                    )}
+
+                                    {/* Unassigned Submeters (if any) */}
+                                    {unassignedSubMeters.length > 0 && (
+                                      <>
+                                        <tr className="bg-danger/10 border-y border-danger/20">
+                                          <td colSpan={6} className="px-2.5 py-1 font-bold text-danger text-[10px] uppercase tracking-wider">
+                                            Unassigned Submeters ({unassignedSubMeters.length}) — No Parent Feeder/Header Assigned
+                                          </td>
+                                        </tr>
+                                        {unassignedSubMeters.map((m, idx) =>
+                                          renderMeterRow(
+                                            m,
+                                            0,
+                                            0,
+                                            idx,
+                                            unassignedSubMeters.length,
+                                            (dir) => handleMoveMeterInList(unassignedSubMeters, idx, dir),
+                                            domain
+                                          )
+                                        )}
+                                      </>
+                                    )}
+                                  </>
+                                )}
+                              </tbody>
+                            </table>
                           </div>
                         )}
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setMeterFormOpen(true)}
-                          className="text-xs"
-                        >
-                          + Add Meter
-                        </Button>
                       </div>
-                    </div>
-
-                    {/* Section Table Body */}
-                    {secMeters.length === 0 ? (
-                      <div className="text-center py-10 px-4 text-text-muted">
-                        <p className="text-sm">No meters in {sec.name} section yet.</p>
-                        <p className="text-xs mt-1 text-text-muted/70">
-                          Click "+ Add Meter" to configure meters under this section.
-                        </p>
-                      </div>
-                    ) : (
-                      <div className="max-h-[60vh] overflow-auto">
-                        <table className="responsive-table table-sticky-col w-full text-sm">
-                          <thead className="sticky top-0 z-10 bg-table-header">
-                            <tr className="border-b border-border text-xs text-text-secondary">
-                              <th className="px-3 py-2.5 text-left font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-table-header-border bg-table-header">
-                                <button
-                                  type="button"
-                                  onClick={() => handleSort('name')}
-                                  className={`bg-transparent border-0 outline-none appearance-none p-0 m-0 hover:text-accent transition-colors focus:outline-none ${sortField === 'name' ? 'text-accent font-bold' : ''}`}
-                                >
-                                  Meter Name
-                                </button>
-                              </th>
-                              <th className="px-3 py-2.5 text-left font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-table-header-border">
-                                <button
-                                  type="button"
-                                  onClick={() => handleSort('category')}
-                                  className={`bg-transparent border-0 outline-none appearance-none p-0 m-0 hover:text-accent transition-colors focus:outline-none ${sortField === 'category' ? 'text-accent font-bold' : ''}`}
-                                >
-                                  Category
-                                </button>
-                              </th>
-                              <th className="px-3 py-2.5 text-left font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-table-header-border">
-                                <button
-                                  type="button"
-                                  onClick={() => handleSort('location')}
-                                  className={`bg-transparent border-0 outline-none appearance-none p-0 m-0 hover:text-accent transition-colors focus:outline-none ${sortField === 'location' ? 'text-accent font-bold' : ''}`}
-                                >
-                                  Location
-                                </button>
-                              </th>
-                              <th className="px-3 py-2.5 text-left font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-table-header-border">
-                                <button
-                                  type="button"
-                                  onClick={() => handleSort('parent')}
-                                  className={`bg-transparent border-0 outline-none appearance-none p-0 m-0 hover:text-accent transition-colors focus:outline-none ${sortField === 'parent' ? 'text-accent font-bold' : ''}`}
-                                >
-                                  Parent (Mother)
-                                </button>
-                              </th>
-                              <th className="px-3 py-2.5 text-center font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-table-header-border">
-                                <button
-                                  type="button"
-                                  onClick={() => handleSort('mf')}
-                                  className={`bg-transparent border-0 outline-none appearance-none p-0 m-0 hover:text-accent transition-colors focus:outline-none ${sortField === 'mf' ? 'text-accent font-bold' : ''}`}
-                                >
-                                  M.F
-                                </button>
-                              </th>
-                              <th className="px-3 py-2.5 text-right font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-table-header-border">Actions</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {/* Incoming Meters */}
-                            {secIncomingMeters.length > 0 && (
-                              <>
-                                <tr className="bg-warning/10 border-y border-warning/20">
-                                  <td colSpan={6} className="px-4 py-2 font-bold text-warning text-xs uppercase tracking-wider">
-                                    Incoming Meters ({secIncomingMeters.length})
-                                  </td>
-                                </tr>
-                                {secIncomingMeters.map((m, idx) =>
-                                  renderMeterRow(m, false, false, idx, secIncomingMeters.length, (dir) =>
-                                    handleMoveMeterInList(secIncomingMeters, idx, dir)
-                                  )
-                                )}
-                              </>
-                            )}
-
-                            {/* Outgoing Mother & Submeters */}
-                            {(secMotherMeters.length > 0 || secSubMeters.length > 0) && (
-                              <>
-                                <tr className="bg-accent/10 border-y border-accent/20">
-                                  <td colSpan={6} className="px-4 py-2 font-bold text-accent text-xs uppercase tracking-wider">
-                                    Mother &amp; Submeter Hierarchy ({secMotherMeters.length + secSubMeters.length + secSubSubMeters.length})
-                                  </td>
-                                </tr>
-                                {secMotherMeters.map((mother, idx) => {
-                                  const children = getSecSubMetersForParent(mother.id);
-                                  const isMotherCollapsed = collapsedMeterIds.has(mother.id);
-
-                                  return (
-                                    <React.Fragment key={mother.id}>
-                                      {renderMeterRow(mother, false, false, idx, secMotherMeters.length, (dir) =>
-                                        handleMoveMeterInList(secMotherMeters, idx, dir)
-                                      )}
-                                      {!isMotherCollapsed &&
-                                        children.map((child, cIdx) => {
-                                          const grandchildren = getSecSubSubMetersForParent(child.id);
-                                          const isChildCollapsed = collapsedMeterIds.has(child.id);
-
-                                          return (
-                                            <React.Fragment key={child.id}>
-                                              {renderMeterRow(child, true, false, cIdx, children.length, (dir) =>
-                                                handleMoveMeterInList(children, cIdx, dir)
-                                              )}
-                                              {!isChildCollapsed &&
-                                                grandchildren.map((gc, gcIdx) =>
-                                                  renderMeterRow(gc, false, true, gcIdx, grandchildren.length, (dir) =>
-                                                    handleMoveMeterInList(grandchildren, gcIdx, dir)
-                                                  )
-                                                )}
-                                            </React.Fragment>
-                                          );
-                                        })}
-                                    </React.Fragment>
-                                  );
-                                })}
-                              </>
-                            )}
-
-                            {/* Unassigned Submeters */}
-                            {secUnassignedSubMeters.length > 0 && (
-                              <>
-                                <tr className="bg-success/10 border-y border-success/20">
-                                  <td colSpan={6} className="px-4 py-2 font-bold text-success text-xs uppercase tracking-wider">
-                                    Unassigned Submeters ({secUnassignedSubMeters.length})
-                                  </td>
-                                </tr>
-                                {secUnassignedSubMeters.map((m, idx) =>
-                                  renderMeterRow(m, false, false, idx, secUnassignedSubMeters.length, (dir) =>
-                                    handleMoveMeterInList(secUnassignedSubMeters, idx, dir)
-                                  )
-                                )}
-                              </>
-                            )}
-
-                            {/* Unassigned Sub of Sub Meters */}
-                            {secUnassignedSubSubMeters.length > 0 && (
-                              <>
-                                <tr className="bg-danger/10 border-y border-danger/20">
-                                  <td colSpan={6} className="px-4 py-2 font-bold text-danger text-xs uppercase tracking-wider">
-                                    Unassigned Sub of Sub ({secUnassignedSubSubMeters.length})
-                                  </td>
-                                </tr>
-                                {secUnassignedSubSubMeters.map((m, idx) =>
-                                  renderMeterRow(m, false, false, idx, secUnassignedSubSubMeters.length, (dir) =>
-                                    handleMoveMeterInList(secUnassignedSubSubMeters, idx, dir)
-                                  )
-                                )}
-                              </>
-                            )}
-                          </tbody>
-                        </table>
-                      </div>
-                    )}
-                  </Card>
-                );
-              })}
+                    );
+                  })}
 
               {/* Uncategorized Meters Card */}
-              {meters.some((m) => !m.section_id) && (
-                <Card className="p-0 overflow-hidden border border-border/80 shadow-sm">
-                  <div className="px-5 py-3.5 bg-bg-elevated border-b border-border flex items-center justify-between">
-                    <div className="flex items-center gap-2.5">
-                      <span className="text-xl">📦</span>
-                      <h2 className="text-base font-bold text-text-primary">Uncategorized Meters</h2>
-                      <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-text-muted/15 text-text-secondary border border-border">
+              {activeSectionId === '__uncategorized__' && meters.some((m) => !m.section_id) && (
+                <div className="border border-border/80 rounded-[var(--radius-md)] bg-bg-elevated shadow-xs overflow-hidden">
+                  <div className="px-3 py-1.5 bg-bg-surface-hover/50 border-b border-border flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-text-muted/15 text-text-secondary border border-border">
                         {meters.filter((m) => !m.section_id).length} Meters
                       </span>
                     </div>
                   </div>
-                  <div className="max-h-[60vh] overflow-auto">
-                    <table className="responsive-table table-sticky-col w-full text-sm">
-                      <thead className="sticky top-0 z-10 bg-table-header">
-                        <tr className="border-b border-border text-xs text-text-secondary">
-                          <th className="px-3 py-2.5 text-left font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-table-header-border bg-table-header">Meter Name</th>
-                          <th className="px-3 py-2.5 text-left font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-table-header-border">Category</th>
-                          <th className="px-3 py-2.5 text-left font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-table-header-border">Location</th>
-                          <th className="px-3 py-2.5 text-left font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-table-header-border">Parent (Mother)</th>
-                          <th className="px-3 py-2.5 text-center font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-table-header-border">M.F</th>
-                          <th className="px-3 py-2.5 text-right font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-table-header-border">Actions</th>
+                  <div className="overflow-x-auto max-h-[65vh]">
+                    <table className="w-full text-xs border-collapse table-fixed min-w-[760px]">
+                      <colgroup>
+                        <col className="w-[220px] sm:w-[260px]" />
+                        <col className="w-[110px]" />
+                        <col className="w-[130px]" />
+                        <col className="w-[130px]" />
+                        <col className="w-[70px]" />
+                        <col className="w-[90px]" />
+                      </colgroup>
+                      <thead className="bg-table-header text-[10px] font-bold uppercase tracking-wider text-white border-b border-border select-none sticky top-0 z-20">
+                        <tr>
+                          <th className="sticky left-0 z-30 bg-table-header px-2.5 py-1.5 text-left text-white border-none">Meter Name</th>
+                          <th className="px-2 py-1.5 text-left text-white border-none">Category</th>
+                          <th className="px-2 py-1.5 text-left text-white border-none">Location</th>
+                          <th className="px-2 py-1.5 text-left text-white border-none">Parent (Mother)</th>
+                          <th className="px-1.5 py-1.5 text-center text-white border-none">M.F</th>
+                          <th className="px-2 py-1.5 text-right text-white border-none">Actions</th>
                         </tr>
                       </thead>
-                      <tbody>
-                        {meters.filter((m) => !m.section_id).map((m, idx) =>
-                          renderMeterRow(m, false, false, idx)
+                      <tbody className="divide-y divide-border/60">
+                        {meters.filter((m) => !m.section_id).map((m, idx, arr) =>
+                          renderMeterRow(m, 0, 0, idx, arr.length, undefined, 'energy')
                         )}
                       </tbody>
                     </table>
                   </div>
-                </Card>
+                </div>
               )}
             </div>
           ) : (
             /* Fallback single table when no sections are defined */
-            <Card className="p-0 overflow-hidden">
-              <div className="max-h-[60vh] overflow-auto">
-                <table className="responsive-table table-sticky-col w-full text-sm">
-                  <thead className="sticky top-0 z-10 bg-table-header">
-                    <tr className="border-b border-border">
-                      <th className="px-3 py-2.5 text-left font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-table-header-border bg-table-header">Meter Name</th>
-                      <th className="px-3 py-2.5 text-left font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-table-header-border">Category</th>
-                      <th className="px-3 py-2.5 text-left font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-table-header-border">Location</th>
-                      <th className="px-3 py-2.5 text-left font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-table-header-border">Parent (Mother)</th>
-                      <th className="px-3 py-2.5 text-center font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-table-header-border">M.F</th>
-                      <th className="px-3 py-2.5 text-right font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-table-header-border">Actions</th>
+            <div className="border border-border/80 rounded-[var(--radius-md)] bg-bg-elevated shadow-xs overflow-hidden">
+              <div className="overflow-x-auto max-h-[65vh]">
+                <table className="w-full text-xs border-collapse table-fixed min-w-[760px]">
+                  <colgroup>
+                    <col className="w-[220px] sm:w-[260px]" />
+                    <col className="w-[110px]" />
+                    <col className="w-[130px]" />
+                    <col className="w-[130px]" />
+                    <col className="w-[70px]" />
+                    <col className="w-[90px]" />
+                  </colgroup>
+                  <thead className="bg-table-header text-[10px] font-bold uppercase tracking-wider text-white border-b border-border select-none sticky top-0 z-20">
+                    <tr>
+                      <th className="sticky left-0 z-30 bg-table-header px-2.5 py-1.5 text-left text-white border-none">Meter Name</th>
+                      <th className="px-2 py-1.5 text-left text-white border-none">Category</th>
+                      <th className="px-2 py-1.5 text-left text-white border-none">Location</th>
+                      <th className="px-2 py-1.5 text-left text-white border-none">Parent (Mother)</th>
+                      <th className="px-1.5 py-1.5 text-center text-white border-none">M.F</th>
+                      <th className="px-2 py-1.5 text-right text-white border-none">Actions</th>
                     </tr>
                   </thead>
-                  <tbody>
-                    {incomingMeters.map((m, idx) => renderMeterRow(m, false, false, idx))}
-                    {motherMeters.map((m, idx) => renderMeterRow(m, false, false, idx))}
+                  <tbody className="divide-y divide-border/60">
+                    {incomingMeters.map((m, idx) => renderMeterRow(m, 0, 0, idx, incomingMeters.length, undefined, 'energy'))}
+                    {motherMeters.map((m, idx) => renderMeterRow(m, 0, 0, idx, motherMeters.length, undefined, 'energy'))}
                   </tbody>
                 </table>
               </div>
-            </Card>
-          )}
-
-          {/* Add Section Empty Table Placeholder */}
-          <Card className="p-0 overflow-hidden border border-border/80 shadow-sm mt-4">
-            <div className="max-h-[60vh] overflow-auto">
-              <table className="responsive-table table-sticky-col w-full text-sm">
-                <thead className="sticky top-0 z-10 bg-table-header">
-                  <tr className="border-b border-border text-xs text-text-secondary">
-                    <th className="px-3 py-2.5 text-left font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-table-header-border bg-table-header">Meter Name</th>
-                    <th className="px-3 py-2.5 text-left font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-table-header-border">Category</th>
-                    <th className="px-3 py-2.5 text-left font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-table-header-border">Location</th>
-                    <th className="px-3 py-2.5 text-left font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-table-header-border">Parent (Mother)</th>
-                    <th className="px-3 py-2.5 text-center font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-table-header-border">M.F</th>
-                    <th className="px-3 py-2.5 text-right font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-table-header-border">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr>
-                    <td colSpan={6} className="px-4 py-12 text-center text-text-muted">
-                      {!showSectionForm ? (
-                        <div className="flex flex-col items-center justify-center">
-                          <p className="text-sm font-medium mb-3">Organize meters by adding a new section</p>
-                          <Button variant="outline" size="sm" onClick={() => setShowSectionForm(true)}>
-                            + Add Section
-                          </Button>
-                        </div>
-                      ) : (
-                        <form onSubmit={handleAddSection} className="inline-flex flex-wrap items-center justify-center gap-3 bg-bg-elevated p-4 rounded-lg border border-border/50 shadow-sm">
-                          <Input
-                            placeholder="Section Name (e.g. Steam Meter)"
-                            value={newSectionName}
-                            onChange={(e) => setNewSectionName(e.target.value)}
-                            className="w-56"
-                          />
-                          <Input
-                            placeholder="Icon (e.g. 💨)"
-                            value={newSectionIcon}
-                            onChange={(e) => setNewSectionIcon(e.target.value)}
-                            className="w-24"
-                          />
-                          <Input
-                            placeholder="Unit (e.g. kWh)"
-                            value={newSectionUnit}
-                            onChange={(e) => setNewSectionUnit(e.target.value)}
-                            className="w-32"
-                          />
-                          <Button type="submit" variant="primary" size="sm" loading={sectionCreating}>
-                            Save
-                          </Button>
-                          <Button type="button" variant="ghost" size="sm" onClick={() => setShowSectionForm(false)}>
-                            Cancel
-                          </Button>
-                        </form>
-                      )}
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
             </div>
-          </Card>
-        </div>
-      ) : (
-        /* MAJOR UNITS & ALLOCATIONS TAB */
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Units List */}
-          <div className="space-y-6">
-            <Card>
-              <h2 className="text-lg font-semibold text-text-primary mb-4">Major Units</h2>
-              <form onSubmit={handleCreateUnit} className="flex gap-2 mb-4">
-                <div className="flex-1">
-                  <input
-                    type="text"
-                    placeholder="Add Unit (e.g. Spinning)"
-                    value={newUnitName}
-                    onChange={(e) => setNewUnitName(e.target.value)}
-                    className="w-full h-10 px-3 py-1 rounded-[var(--radius-md)] border border-border bg-bg-primary text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent transition-all"
-                  />
-                </div>
-                <Button type="submit" variant="primary" loading={unitCreating}>Add</Button>
-              </form>
-
-              {units.length === 0 ? (
-                <p className="text-sm text-text-muted italic py-4">No units defined yet.</p>
-              ) : (
-                <div className="space-y-1">
-                  {units.map((unit, idx) => (
-                    <div
-                      key={unit.id}
-                      onClick={() => setSelectedUnitId(unit.id)}
-                      className={`flex items-center justify-between p-2.5 rounded-[var(--radius-md)] cursor-pointer transition-all ${
-                        selectedUnitId === unit.id
-                          ? 'bg-accent/15 text-accent font-medium border border-accent/30'
-                          : 'hover:bg-bg-surface-hover text-text-secondary border border-transparent'
-                      }`}
-                    >
-                      <div className="flex items-center gap-2 min-w-0">
-                        <span className="text-sm truncate">{unit.name}</span>
-                        <AllocationCompositionBadge
-                          directCount={allocations.filter((a) => a.unit_id === unit.id).length}
-                          remainderCount={remainderRules.filter((r) => r.unit_id === unit.id).length}
-                        />
-                      </div>
-                      <div className="flex items-center gap-1.5">
-                        <div className="flex items-center gap-0.5">
-                          <button
-                            disabled={idx === 0}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleMoveUnit(idx, 'up');
-                            }}
-                            className="text-text-muted hover:text-accent disabled:opacity-30 disabled:pointer-events-none p-1 rounded transition-colors"
-                            title="Move Up"
-                          >
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                              <polyline points="18 15 12 9 6 15" />
-                            </svg>
-                          </button>
-                          <button
-                            disabled={idx === units.length - 1}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleMoveUnit(idx, 'down');
-                            }}
-                            className="text-text-muted hover:text-accent disabled:opacity-30 disabled:pointer-events-none p-1 rounded transition-colors"
-                            title="Move Down"
-                          >
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                              <polyline points="6 9 12 15 18 9" />
-                            </svg>
-                          </button>
-                        </div>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleDeleteUnit(unit);
-                          }}
-                          className="text-text-muted hover:text-danger p-1 rounded transition-colors"
-                        >
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-                          </svg>
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </Card>
-          </div>
-
-          {/* Allocation Matrix (Outgoing Meters Only) */}
-          <div className="lg:col-span-2">
-            <Card className="p-0 overflow-hidden">
-              <div className="p-4 border-b border-border bg-bg-elevated flex items-start sm:items-center justify-between flex-wrap gap-3">
-                <div className="min-w-0">
-                  <h2 className="text-lg font-semibold text-text-primary">Meter Allocation Matrix</h2>
-                  <p className="text-xs text-text-secondary mt-0.5">
-                    {!selectedUnit
-                      ? 'Select a Major Unit from the left to configure allocations'
-                      : `Define what percentage of each directly-metered outgoing meter belongs to "${selectedUnit.name}"`}
-                  </p>
-                </div>
-                {selectedUnitId && (
-                  <Button variant="success" size="sm" loading={unitSaving} onClick={handleSaveAllocations}>
-                    Save Changes
-                  </Button>
-                )}
-              </div>
-
-              {!selectedUnitId ? (
-                <div className="text-center py-16 text-text-muted">
-                  <p className="text-sm">Please select or add a unit first.</p>
-                </div>
-              ) : outgoingMetersOnly.length === 0 ? (
-                <div className="text-center py-16 text-text-muted">
-                  <p className="text-sm">No active outgoing meters configured.</p>
-                </div>
-              ) : (
-                <div className="max-h-[60vh] overflow-auto mt-4">
-                  <table className="responsive-table table-sticky-col w-full text-sm">
-                    <thead className="sticky top-0 z-10 bg-table-header">
-                      <tr className="border-b border-border text-text-secondary font-semibold">
-                        <th className="px-3 py-2.5 text-left font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-table-header-border bg-table-header">Outgoing Meter Name</th>
-                        <th className="px-3 py-2.5 text-left font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-table-header-border">Location</th>
-                        <th className="px-3 py-2.5 text-center font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-table-header-border">Other Allocations</th>
-                        <th className="px-3 py-2.5 text-center font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-table-header-border">Unallocated</th>
-                        <th className="px-3 py-2.5 text-center font-bold text-[11px] uppercase tracking-wider text-accent border-b-2 border-table-header-border w-[120px]">Allocation (%)</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {outgoingMetersOnly.map((meter, idx) => {
-                        const localVal = localAllocations[meter.id] || '';
-                        const otherPct = meterTotalAllocations[meter.id] || 0;
-                        const localPct = parseFloat(localVal) || 0;
-                        const totalPct = otherPct + localPct;
-                        const isOver = totalPct > 100;
-
-                        const treeAllocated = getTreeTotalAllocated(meter.id, localAllocations);
-                        const unallocatedPct = Math.max(0, 100 - treeAllocated);
-
-                        return (
-                          <tr
-                            key={meter.id}
-                            className={`border-b border-border transition-colors hover:bg-bg-surface-hover ${
-                              idx % 2 === 0 ? 'bg-bg-surface' : 'bg-bg-primary/50'
-                            }`}
-                          >
-                            <td className={`px-4 py-3 font-medium text-text-primary ${idx % 2 === 0 ? 'bg-bg-surface' : 'bg-bg-primary/50'}`}>{meter.name}</td>
-                            <td className="px-4 py-3 text-text-secondary">{meter.location}</td>
-                            <td className="px-4 py-3 text-center tabular-nums">
-                              {otherPct > 0 ? (
-                                <span className="text-text-muted text-xs font-semibold">{otherPct}%</span>
-                              ) : (
-                                <span className="text-text-muted/40 text-xs">—</span>
-                              )}
-                            </td>
-                            <td className="px-4 py-3 text-center font-semibold tabular-nums">
-                              <span className={unallocatedPct === 0 ? 'text-text-muted/50' : 'text-success'}>
-                                {unallocatedPct}%
-                              </span>
-                            </td>
-                            <td className="px-4 py-3 text-center">
-                              <div className="flex items-center justify-center gap-1.5">
-                                <input
-                                  type="number"
-                                  min="0"
-                                  max="100"
-                                  placeholder="0"
-                                  value={localVal}
-                                  onChange={(e) => handlePercentageChange(meter.id, e.target.value)}
-                                  className={`w-16 h-8 text-center rounded border bg-bg-primary font-bold tabular-nums text-sm focus:outline-none focus:ring-2 transition-all ${
-                                    isOver
-                                      ? 'border-danger focus:ring-danger/50 text-danger'
-                                      : localPct > 0
-                                      ? 'border-accent focus:ring-accent/50 text-accent'
-                                      : 'border-border focus:ring-accent/50 text-text-secondary'
-                                  }`}
-                                />
-                                <span className="text-xs text-text-muted font-bold">%</span>
-                              </div>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </Card>
-
-            {/* Calculated Remainder Rules — combine with the Direct Assignment
-                matrix above; a unit's total is the sum of both engines. */}
-            {selectedUnitId && (
-              <Card className="p-0 overflow-hidden mt-4">
-                <div className="p-4 border-b border-border bg-bg-elevated flex items-start sm:items-center justify-between flex-wrap gap-3">
-                  <div className="min-w-0">
-                    <h2 className="text-lg font-semibold text-text-primary">Calculated Remainder Rules</h2>
-                    <p className="text-xs text-text-secondary mt-0.5">
-                      {selectedUnit
-                        ? `For members of "${selectedUnit.name}" that share an unmetered feed — ( Base Source − Deductions ) × Share %`
-                        : 'Define ( Base Source − Deductions ) × Share % for shared, unmetered feeds'}
-                    </p>
-                  </div>
-                  <Button variant="outline" size="sm" onClick={handleAddRemainderRule}>
-                    <Plus size={13} className="mr-1" />
-                    Add Rule
-                  </Button>
-                </div>
-
-                <div className="p-4 flex flex-col gap-4">
-                  {localRemainderRules.length === 0 ? (
-                    <p className="text-sm text-text-muted text-center py-6">
-                      No remainder rules yet — add one for warehouses (or other members) that share a feed
-                      without their own meter.
-                    </p>
-                  ) : (
-                    localRemainderRules.map((rule, idx) => (
-                      <RemainderRuleCard
-                        key={rule.localKey}
-                        unitId={selectedUnitId}
-                        index={idx}
-                        baseSourceOptions={remainderBaseSourceOptions}
-                        deductionCandidates={deductionCandidatesFor(rule)}
-                        allMeters={meters}
-                        value={rule}
-                        onChange={(patch) => updateLocalRule(rule.localKey, patch)}
-                        isDirty={dirtyRuleKeys.has(rule.localKey)}
-                        isSaving={savingRuleKey === rule.localKey}
-                        onSave={() => handleSaveRemainderRule(rule.localKey)}
-                        onDelete={() => handleDeleteRemainderRule(rule.localKey)}
-                      />
-                    ))
-                  )}
-                </div>
-              </Card>
-            )}
-          </div>
+          )}
         </div>
       )}
+
+      {/* Add Section Modal */}
+      <Modal
+        open={showSectionForm}
+        onClose={() => setShowSectionForm(false)}
+        title="Add Meter Section"
+        compact
+        maxWidth="440px"
+      >
+        <form onSubmit={handleAddSection} className="p-4 space-y-3.5">
+          <div>
+            <label className="block text-xs font-semibold text-text-secondary mb-1">
+              Section Name <span className="text-danger">*</span>
+            </label>
+            <Input
+              placeholder="e.g. Steam Meter, Gas Feeder, Generator"
+              value={newSectionName}
+              onChange={(e) => setNewSectionName(e.target.value)}
+              required
+              autoFocus
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-text-secondary mb-1">
+              Unit
+            </label>
+            <Input
+              placeholder="e.g. kWh, m³, hrs"
+              value={newSectionUnit}
+              onChange={(e) => setNewSectionUnit(e.target.value)}
+            />
+          </div>
+
+          <div className="flex items-center justify-end gap-2 pt-2 border-t border-border/60">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => setShowSectionForm(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              variant="primary"
+              size="sm"
+              loading={sectionCreating}
+            >
+              Create Section
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Edit / Rename Section Modal */}
+      <Modal
+        open={!!editingSection}
+        onClose={() => setEditingSection(null)}
+        title={`Edit Section: ${editingSection?.name || ''}`}
+        compact
+        maxWidth="440px"
+      >
+        <form onSubmit={handleUpdateSection} className="p-4 space-y-3.5">
+          <div>
+            <label className="block text-xs font-semibold text-text-secondary mb-1">
+              Section Name <span className="text-danger">*</span>
+            </label>
+            <Input
+              placeholder="e.g. Energy Meter, Gas Meter, RMS Room"
+              value={editSectionName}
+              onChange={(e) => setEditSectionName(e.target.value)}
+              required
+              autoFocus
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-text-secondary mb-1">
+              Unit
+            </label>
+            <Input
+              placeholder="e.g. kWh, m³, hrs"
+              value={editSectionUnit}
+              onChange={(e) => setEditSectionUnit(e.target.value)}
+            />
+          </div>
+
+          <div className="flex items-center justify-between pt-2 border-t border-border/60">
+            <Button
+              type="button"
+              variant="danger"
+              size="sm"
+              onClick={() => {
+                if (editingSection) {
+                  const target = editingSection;
+                  setEditingSection(null);
+                  handleDeleteSection(target);
+                }
+              }}
+            >
+              Delete Section
+            </Button>
+
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => setEditingSection(null)}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                variant="primary"
+                size="sm"
+                loading={sectionUpdating}
+              >
+                Save Changes
+              </Button>
+            </div>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Rename Feeder Tiers Modal */}
+      {/* Edit Category Modal */}
+      <Modal
+        open={showTierModal}
+        onClose={() => setShowTierModal(false)}
+        title="Edit Category"
+        compact
+        maxWidth="640px"
+      >
+        <form onSubmit={handleSaveTierLabels} className="p-3.5 space-y-3">
+          {/* Electricity Hierarchy Tiers */}
+          <div className="space-y-1.5">
+            <h4 className="text-[11px] font-bold text-accent uppercase tracking-wider">
+              Electricity Hierarchy Tiers
+            </h4>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              <Input
+                label="Tier 0"
+                placeholder="Incoming Feeder"
+                value={tempTierLabels.incoming}
+                onChange={(e) => setTempTierLabels((p) => ({ ...p, incoming: e.target.value }))}
+                required
+              />
+              <Input
+                label="Tier 1"
+                placeholder="Mother Panel"
+                value={tempTierLabels.outgoing_main}
+                onChange={(e) => setTempTierLabels((p) => ({ ...p, outgoing_main: e.target.value }))}
+                required
+              />
+              <Input
+                label="Tier 2"
+                placeholder="Breaker Submeter"
+                value={tempTierLabels.outgoing_sub}
+                onChange={(e) => setTempTierLabels((p) => ({ ...p, outgoing_sub: e.target.value }))}
+                required
+              />
+              <Input
+                label="Tier 3"
+                placeholder="Sub-Submeter"
+                value={tempTierLabels.outgoing_sub_sub}
+                onChange={(e) => setTempTierLabels((p) => ({ ...p, outgoing_sub_sub: e.target.value }))}
+                required
+              />
+            </div>
+          </div>
+
+          {/* Gas Hierarchy Tiers */}
+          <div className="space-y-1.5 pt-2 border-t border-border/50">
+            <h4 className="text-[11px] font-bold text-warning uppercase tracking-wider">
+              Gas Hierarchy Tiers
+            </h4>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              <Input
+                label="Tier 0"
+                placeholder="RMS Incomer"
+                value={tempTierLabels.gas_incoming}
+                onChange={(e) => setTempTierLabels((p) => ({ ...p, gas_incoming: e.target.value }))}
+                required
+              />
+              <Input
+                label="Tier 1"
+                placeholder="Gas Header"
+                value={tempTierLabels.gas_outgoing_main}
+                onChange={(e) => setTempTierLabels((p) => ({ ...p, gas_outgoing_main: e.target.value }))}
+                required
+              />
+              <Input
+                label="Tier 2"
+                placeholder="Appliance Sub"
+                value={tempTierLabels.gas_outgoing_sub}
+                onChange={(e) => setTempTierLabels((p) => ({ ...p, gas_outgoing_sub: e.target.value }))}
+                required
+              />
+              <Input
+                label="Tier 3"
+                placeholder="Sub-Appliance"
+                value={tempTierLabels.gas_outgoing_sub_sub}
+                onChange={(e) => setTempTierLabels((p) => ({ ...p, gas_outgoing_sub_sub: e.target.value }))}
+                required
+              />
+            </div>
+          </div>
+
+          {/* Run Hours Machinery Groups */}
+          <div className="space-y-1.5 pt-2 border-t border-border/50">
+            <h4 className="text-[11px] font-bold text-success uppercase tracking-wider">
+              Run Hours Machinery Groups
+            </h4>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              <Input
+                label="Group 1"
+                placeholder="Compressor"
+                value={tempTierLabels.hour_compressor}
+                onChange={(e) => setTempTierLabels((p) => ({ ...p, hour_compressor: e.target.value }))}
+                required
+              />
+              <Input
+                label="Group 2"
+                placeholder="Pump"
+                value={tempTierLabels.hour_pump}
+                onChange={(e) => setTempTierLabels((p) => ({ ...p, hour_pump: e.target.value }))}
+                required
+              />
+              <Input
+                label="Group 3"
+                placeholder="Generator"
+                value={tempTierLabels.hour_generator}
+                onChange={(e) => setTempTierLabels((p) => ({ ...p, hour_generator: e.target.value }))}
+                required
+              />
+              <Input
+                label="Group 4"
+                placeholder="Other Machinery"
+                value={tempTierLabels.hour_other}
+                onChange={(e) => setTempTierLabels((p) => ({ ...p, hour_other: e.target.value }))}
+                required
+              />
+            </div>
+          </div>
+
+          {/* Equipment Categories Management */}
+          <div className="space-y-2 pt-2 border-t border-border/50">
+            <div className="flex items-center justify-between">
+              <h4 className="text-[11px] font-bold text-text-primary uppercase tracking-wider">
+                Equipment Categories ({uniqueEquipmentCategories.length})
+              </h4>
+              <span className="text-[10px] text-text-muted">REB, Generator, Solar, Boiler, etc.</span>
+            </div>
+
+            {uniqueEquipmentCategories.length > 0 ? (
+              <div className="flex flex-wrap gap-1.5 max-h-[110px] overflow-y-auto p-1.5 rounded bg-bg-surface border border-border/60">
+                {uniqueEquipmentCategories.map((c) => (
+                  <div
+                    key={c.name}
+                    className="inline-flex items-center gap-1.5 px-2 py-1 rounded bg-bg-elevated border border-border text-xs"
+                  >
+                    {categoryRenameTarget === c.name ? (
+                      <div className="flex items-center gap-1">
+                        <input
+                          type="text"
+                          value={categoryNewName}
+                          onChange={(e) => setCategoryNewName(e.target.value)}
+                          className="px-1.5 py-0.5 text-xs bg-bg-surface border border-accent rounded w-24 text-text-primary focus:outline-none"
+                          autoFocus
+                          placeholder="New name"
+                        />
+                        <button
+                          type="button"
+                          disabled={categoryActionLoading}
+                          onClick={() => handleRenameCategory(c.name, categoryNewName)}
+                          className="px-1.5 py-0.5 text-[10px] bg-accent text-white rounded font-medium disabled:opacity-50 cursor-pointer"
+                        >
+                          Save
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setCategoryRenameTarget(null)}
+                          className="px-1 text-[10px] text-text-muted hover:text-text-primary cursor-pointer"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ) : (
+                      <>
+                        <span className="font-semibold text-text-primary">{c.name}</span>
+                        <span className="text-[10px] text-text-muted">({c.count})</span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setCategoryRenameTarget(c.name);
+                            setCategoryNewName(c.name);
+                          }}
+                          className="text-accent hover:underline text-[10px] ml-0.5 cursor-pointer font-medium"
+                          title="Rename category across all meters"
+                        >
+                          Rename
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteCategory(c.name)}
+                          className="text-text-muted hover:text-danger text-[10px] cursor-pointer ml-0.5"
+                          title="Clear category from all meters"
+                        >
+                          ✕
+                        </button>
+                      </>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-[11px] text-text-muted italic py-1.5 px-2 bg-bg-surface rounded border border-border/50 text-center">
+                No custom equipment categories assigned to meters yet.
+              </p>
+            )}
+
+            {/* Quick Rename Tool */}
+            <div className="flex items-center gap-1.5 pt-1">
+              <input
+                type="text"
+                placeholder="Current category name..."
+                value={manualOldCategory}
+                onChange={(e) => setManualOldCategory(e.target.value)}
+                className="flex-1 px-2 py-1 text-xs bg-bg-surface border border-border rounded text-text-primary placeholder:text-text-muted focus:outline-none focus:border-accent"
+              />
+              <span className="text-text-muted text-xs">→</span>
+              <input
+                type="text"
+                placeholder="New name..."
+                value={manualNewCategory}
+                onChange={(e) => setManualNewCategory(e.target.value)}
+                className="flex-1 px-2 py-1 text-xs bg-bg-surface border border-border rounded text-text-primary placeholder:text-text-muted focus:outline-none focus:border-accent"
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={categoryActionLoading || !manualOldCategory.trim() || !manualNewCategory.trim()}
+                onClick={() => handleRenameCategory(manualOldCategory, manualNewCategory)}
+                className="text-xs h-7 px-2.5 shrink-0"
+              >
+                Rename
+              </Button>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between pt-2.5 border-t border-border/60">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={handleResetTierLabels}
+              className="text-xs text-text-muted hover:text-danger h-7 px-2"
+            >
+              Reset to Defaults
+            </Button>
+
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowTierModal(false)}
+                className="text-xs h-7 px-3"
+              >
+                Cancel
+              </Button>
+              <Button type="submit" variant="primary" size="sm" className="text-xs h-7 px-3">
+                Save
+              </Button>
+            </div>
+          </div>
+        </form>
+      </Modal>
 
       {/* Add Meter Modal */}
       <MeterForm
@@ -1449,6 +1587,7 @@ export default function SettingsPage() {
         mainMeters={potentialParentMeters}
         allMeters={meters}
         sections={sections}
+        defaultSectionId={activeSectionId !== '__uncategorized__' ? activeSectionId : undefined}
         loading={meterSubmitting}
       />
 
@@ -1461,6 +1600,7 @@ export default function SettingsPage() {
         mainMeters={potentialParentMeters}
         allMeters={meters}
         sections={sections}
+        defaultSectionId={editingMeter?.section_id || undefined}
         loading={meterSubmitting}
       />
     </div>

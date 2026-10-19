@@ -15,18 +15,18 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
     const inputId = id || label?.toLowerCase().replace(/\s+/g, '-');
 
     return (
-      <div className="flex flex-col gap-1.5">
+      <div className="flex flex-col gap-1">
         {label && (
           <label
             htmlFor={inputId}
-            className="text-sm font-medium text-text-secondary"
+            className="text-xs font-medium text-text-secondary"
           >
             {label}
           </label>
         )}
         <div className="relative">
           {icon && (
-            <div className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted">
+            <div className="absolute left-2.5 top-1/2 -translate-y-1/2 text-text-muted">
               {icon}
             </div>
           )}
@@ -39,8 +39,8 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
               transition-all duration-200
               focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/30
               disabled:opacity-50 disabled:cursor-not-allowed
-              ${icon ? 'pl-10' : 'pl-4'} pr-4
-              ${large ? 'py-4 text-lg min-h-[56px]' : 'py-2.5 text-sm'}
+              ${icon ? 'pl-8' : 'pl-3'} pr-3
+              ${large ? 'py-3.5 text-base min-h-[48px]' : 'py-2 text-xs sm:text-sm'}
               ${error ? 'border-danger focus:border-danger focus:ring-danger/30' : ''}
               ${className}
             `}

@@ -5,8 +5,8 @@ import ExcelJS from 'exceljs';
 import { format } from 'date-fns';
 import { Button } from '@/components/ui/Button';
 import { useToast } from '@/components/ui/Toast';
-import { getTypeLabel } from './HistoryFilters';
 import type { Reading, Meter, Profile, MeterSection } from '@/lib/types';
+import { useTierLabels, getEnergyGroupLabel, getGasGroupLabel, getSectionDomain, getHourGroupKey } from '@/lib/useTierLabels';
 
 interface HistoryExportButtonProps {
   readings: (Reading & { meter: Meter; profile: Profile })[];
@@ -15,6 +15,7 @@ interface HistoryExportButtonProps {
 
 export function HistoryExportButton({ readings, sections }: HistoryExportButtonProps) {
   const { addToast } = useToast();
+  const tierLabels = useTierLabels();
 
   const handleExport = useCallback(async () => {
     if (readings.length === 0) return;
@@ -78,43 +79,70 @@ export function HistoryExportButton({ readings, sections }: HistoryExportButtonP
         }
       }
 
-      for (const r of rows) {
-        const prevValue = r.usage != null ? Number(r.reading_value) - Number(r.usage) : null;
+      for (let i = 0; i < rows.length; i++) {
+        const r = rows[i];
+        const nextOlder = rows.slice(i + 1).find((other) => other.meter_id === r.meter_id);
+        const prevValue =
+          r.is_reset
+            ? null
+            : r.usage != null
+            ? Number(r.reading_value) - Number(r.usage)
+            : nextOlder
+            ? Number(nextOlder.reading_value)
+            : null;
         const dataRow = worksheet.addRow({
           date: format(new Date(r.reading_date), 'dd MMM yyyy'),
           meterName: r.meter?.name || '—',
           location: r.meter?.location || '',
-          prevReading: prevValue != null ? prevValue : '',
+          prevReading: r.is_reset ? 0 : prevValue != null ? prevValue : '',
           currReading: Number(r.reading_value),
-          consumed: r.usage != null ? Number(r.usage) : '',
+          consumed: r.is_reset ? '' : r.usage != null ? Number(r.usage) : '',
           loggedBy: r.profile?.full_name || '—',
         });
         dataRow.font = cambriaFont;
       }
     };
 
-    // Same grouping sequence as Settings / Log Reading: walk sections in
-    // sort_order, then Incoming → Outgoing (Main) → Outgoing (Sub) → Sub of
-    // Sub within each, followed by an Uncategorized group.
-    const byType = (rows: typeof readings, type: string) =>
-      rows.filter((r) => getTypeLabel(r.meter?.type || '') === type);
+    // Grouping sequence matched to Settings & Log Reading using configured tier labels
+    const isIncoming = (t?: string) => t === 'incoming' || t === 'main';
+    const isOutgoingMain = (t?: string) => t === 'outgoing_main' || t === 'outgoing';
+    const isOutgoingSub = (t?: string) => t === 'outgoing_sub' || t === 'submeter';
+    const isOutgoingSubSub = (t?: string) => t === 'outgoing_sub_sub';
 
-    const groupBySectionThenType = (rows: typeof readings, label: string) => {
-      addGroupRows(label, byType(rows, 'Incoming'));
-      addGroupRows(label, byType(rows, 'Outgoing (Main)'));
-      addGroupRows(label, byType(rows, 'Outgoing (Sub)'));
-      addGroupRows(label, byType(rows, 'Sub of Sub'));
+    const groupBySectionThenType = (rows: typeof readings, label: string, section?: MeterSection) => {
+      const domain = getSectionDomain(section);
+      const prefix = label ? `${label} - ` : '';
+
+      if (domain === 'hour') {
+        const comp = rows.filter((r) => getHourGroupKey(r.meter) === 'Compressor');
+        const pump = rows.filter((r) => getHourGroupKey(r.meter) === 'Pump');
+        const gen = rows.filter((r) => getHourGroupKey(r.meter) === 'Generator');
+        const other = rows.filter((r) => getHourGroupKey(r.meter) === 'Other');
+
+        addGroupRows(`${prefix}${tierLabels.hour_compressor || 'Compressor'}`, comp);
+        addGroupRows(`${prefix}${tierLabels.hour_pump || 'Pump'}`, pump);
+        addGroupRows(`${prefix}${tierLabels.hour_generator || 'Generator'}`, gen);
+        addGroupRows(`${prefix}${tierLabels.hour_other || 'Other Machinery'}`, other);
+        return;
+      }
+
+      const getGroup = domain === 'gas' ? getGasGroupLabel : getEnergyGroupLabel;
+
+      addGroupRows(`${prefix}${getGroup('incoming', tierLabels)}`, rows.filter((r) => isIncoming(r.meter?.type)));
+      addGroupRows(`${prefix}${getGroup('outgoing_main', tierLabels)}`, rows.filter((r) => isOutgoingMain(r.meter?.type)));
+      addGroupRows(`${prefix}${getGroup('outgoing_sub', tierLabels)}`, rows.filter((r) => isOutgoingSub(r.meter?.type)));
+      addGroupRows(`${prefix}${getGroup('outgoing_sub_sub', tierLabels)}`, rows.filter((r) => isOutgoingSubSub(r.meter?.type)));
     };
 
     if (sections.length > 0) {
       for (const sec of sections) {
         const secRows = readings.filter((r) => r.meter?.section_id === sec.id);
         if (secRows.length === 0) continue;
-        groupBySectionThenType(secRows, sec.name);
+        groupBySectionThenType(secRows, sec.name, sec);
       }
       const uncategorized = readings.filter((r) => !r.meter?.section_id);
       if (uncategorized.length > 0) {
-        groupBySectionThenType(uncategorized, 'Uncategorized');
+        groupBySectionThenType(uncategorized, 'Other Meters');
       }
     } else {
       groupBySectionThenType(readings, '');
@@ -142,16 +170,17 @@ export function HistoryExportButton({ readings, sections }: HistoryExportButtonP
     URL.revokeObjectURL(url);
 
     addToast('success', 'Reading history exported to Excel successfully!');
-  }, [readings, sections, addToast]);
+  }, [readings, sections, tierLabels, addToast]);
 
   return (
     <Button
       variant="outline"
-      size="md"
+      size="sm"
       onClick={handleExport}
       disabled={readings.length === 0}
+      className="text-xs"
       icon={
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
           <polyline points="14 2 14 8 20 8" />
           <line x1="16" y1="13" x2="8" y2="13" />
@@ -160,7 +189,7 @@ export function HistoryExportButton({ readings, sections }: HistoryExportButtonP
         </svg>
       }
     >
-      Export to Excel
+      Export Excel
     </Button>
   );
 }

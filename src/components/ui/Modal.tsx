@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useEffect, useCallback } from 'react';
+import React, { useEffect, useCallback, useState } from 'react';
+import { createPortal } from 'react-dom';
 
 interface ModalProps {
   open: boolean;
@@ -8,9 +9,16 @@ interface ModalProps {
   title: string;
   children: React.ReactNode;
   maxWidth?: string;
+  compact?: boolean;
 }
 
-export function Modal({ open, onClose, title, children, maxWidth = '480px' }: ModalProps) {
+export function Modal({ open, onClose, title, children, maxWidth = '480px', compact = false }: ModalProps) {
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   const handleEscape = useCallback(
     (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
@@ -29,31 +37,41 @@ export function Modal({ open, onClose, title, children, maxWidth = '480px' }: Mo
     };
   }, [open, handleEscape]);
 
-  if (!open) return null;
+  if (!open || !mounted) return null;
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+  return createPortal(
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
       {/* Backdrop */}
       <div
-        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+        className="fixed inset-0 bg-black/60 backdrop-blur-sm transition-opacity"
         onClick={onClose}
       />
 
       {/* Modal panel */}
       <div
-        className="relative bg-bg-surface border border-border rounded-[var(--radius-xl)] shadow-2xl animate-fade-in w-full overflow-hidden"
+        className={`relative bg-bg-surface border border-border shadow-2xl animate-fade-in w-full my-auto overflow-hidden ${
+          compact ? 'rounded-[var(--radius-lg)]' : 'rounded-[var(--radius-xl)]'
+        }`}
         style={{ maxWidth }}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-border">
-          <h2 className="text-lg font-semibold text-text-primary">{title}</h2>
+        <div
+          className={`flex items-center justify-between border-b border-border ${
+            compact ? 'px-4 py-2.5 sm:px-5 sm:py-3' : 'px-5 py-3.5'
+          }`}
+        >
+          <h2 className={`font-semibold text-text-primary ${compact ? 'text-sm sm:text-base' : 'text-base sm:text-lg'}`}>
+            {title}
+          </h2>
           <button
             onClick={onClose}
-            className="flex items-center justify-center w-8 h-8 rounded-[var(--radius-sm)] text-text-muted hover:text-text-primary hover:bg-bg-surface-hover transition-colors cursor-pointer"
+            className={`flex items-center justify-center rounded-[var(--radius-sm)] text-text-muted hover:text-text-primary hover:bg-bg-surface-hover transition-colors cursor-pointer ${
+              compact ? 'w-6 h-6' : 'w-7 h-7'
+            }`}
           >
             <svg
-              width="18"
-              height="18"
+              width={compact ? 14 : 16}
+              height={compact ? 14 : 16}
               viewBox="0 0 18 18"
               fill="none"
               xmlns="http://www.w3.org/2000/svg"
@@ -69,10 +87,16 @@ export function Modal({ open, onClose, title, children, maxWidth = '480px' }: Mo
         </div>
 
         {/* Body */}
-        <div className="px-6 py-5 max-h-[70vh] overflow-y-auto">
+        <div
+          className={`overflow-y-auto ${
+            compact ? 'px-4 py-3 sm:px-5 sm:py-3.5 max-h-[82vh]' : 'px-5 py-4 max-h-[78vh]'
+          }`}
+        >
           {children}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
+

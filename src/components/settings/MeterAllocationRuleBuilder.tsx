@@ -357,15 +357,15 @@ function DirectAssignmentPanel({
 
       <div className="border border-border rounded-[var(--radius-md)] overflow-hidden">
         <table className="w-full border-collapse">
-          <thead>
-            <tr className="bg-table-header border-b border-table-header-border">
-              <th className="text-left px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-text-muted">
+          <thead className="bg-table-header text-white">
+            <tr className="bg-table-header border-b border-border">
+              <th className="text-left px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-white">
                 Meter
               </th>
-              <th className="text-left px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-text-muted">
+              <th className="text-left px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-white">
                 Location
               </th>
-              <th className="text-right px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-text-muted w-28">
+              <th className="text-right px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-white w-28">
                 Share %
               </th>
               <th className="w-9" />

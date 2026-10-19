@@ -1,16 +1,19 @@
 'use client';
 
-import React, { useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import React, { useMemo, useState, useEffect } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Card } from '@/components/ui/Card';
-import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 import { Input } from '@/components/ui/Input';
+import { Tabs } from '@/components/ui/Tabs';
 import { useToast } from '@/components/ui/Toast';
 import { updateReadingAction, deleteReadingAction } from '@/lib/actions';
+import { updateBranchReading, deleteBranchReading } from '@/lib/energyActions';
 import { format } from 'date-fns';
+import { HistoryFilters } from './HistoryFilters';
 import type { Reading, Meter, Profile, UserRole, MeterSection } from '@/lib/types';
+import { useTierLabels, getMeterTierLabel, getSectionDomain, getHourGroupKey } from '@/lib/useTierLabels';
 
 type HistoryReading = Reading & { meter: Meter; profile: Profile };
 
@@ -26,21 +29,37 @@ interface HistoryTableProps {
   readings: HistoryReading[];
   userRole: UserRole;
   sections: MeterSection[];
+  meters: Meter[];
+  currentMeterIds: string[];
+  currentFrom?: string;
+  currentTo?: string;
+  initialTab?: string;
 }
 
 const UNCATEGORIZED_SECTION: MeterSection = {
   id: '__uncategorized__',
   name: 'Other Meters',
-  icon: '📋',
+  icon: '',
   color: '#64748B',
   unit: '',
   sort_order: Number.MAX_SAFE_INTEGER,
   created_at: '',
 };
 
-export function HistoryTable({ readings, userRole, sections }: HistoryTableProps) {
+export function HistoryTable({
+  readings,
+  userRole,
+  sections,
+  meters,
+  currentMeterIds,
+  currentFrom,
+  currentTo,
+  initialTab,
+}: HistoryTableProps) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { addToast } = useToast();
+  const tierLabels = useTierLabels();
 
   const [editingReading, setEditingReading] = useState<Reading | null>(null);
   const [editValue, setEditValue] = useState('');
@@ -66,10 +85,10 @@ export function HistoryTable({ readings, userRole, sections }: HistoryTableProps
     }
 
     setSubmitting(true);
-    const res = await updateReadingAction(editingReading.id, {
-      reading_value: val,
-      reading_date: editDate,
-    });
+    const updatePayload = { reading_value: val, reading_date: editDate };
+    const res = (editingReading as any)._branch
+      ? await updateBranchReading(editingReading.id, updatePayload)
+      : await updateReadingAction(editingReading.id, updatePayload);
 
     if (res.success) {
       addToast('success', res.message);
@@ -87,7 +106,9 @@ export function HistoryTable({ readings, userRole, sections }: HistoryTableProps
     );
     if (!confirmed) return;
 
-    const res = await deleteReadingAction(reading.id);
+    const res = (reading as any)._branch
+      ? await deleteBranchReading(reading.id)
+      : await deleteReadingAction(reading.id);
     if (res.success) {
       addToast('success', res.message);
       router.refresh();
@@ -108,75 +129,131 @@ export function HistoryTable({ readings, userRole, sections }: HistoryTableProps
     }
 
     const groups = orderedSections
-      .map((section) => ({ section, readings: byId.get(section.id) || [] }))
-      .filter((g) => g.readings.length > 0);
+      .filter((section) => meters.some((m) => m.section_id === section.id))
+      .map((section) => ({
+        section,
+        readings: byId.get(section.id) || [],
+      }));
 
     const uncategorized = byId.get(UNCATEGORIZED_SECTION.id) || [];
-    if (uncategorized.length > 0) {
+    if (meters.some((m) => !m.section_id)) {
       groups.push({ section: UNCATEGORIZED_SECTION, readings: uncategorized });
     }
 
     return groups;
-  }, [readings, sections]);
+  }, [readings, sections, meters]);
 
-  if (readings.length === 0) {
-    return (
-      <Card className="p-0 overflow-hidden">
-        <div className="px-4 py-16 text-center text-text-muted">
-          <svg
-            width="48"
-            height="48"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.5"
-            className="mx-auto mb-3 opacity-40"
-          >
-            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-            <polyline points="14 2 14 8 20 8" />
-          </svg>
-          <p className="text-sm">No readings found</p>
-          <p className="text-xs mt-1">Try adjusting your filters or log a new reading</p>
-        </div>
-      </Card>
-    );
-  }
+  const urlTab = searchParams.get('tab');
+
+  const [activeTab, setActiveTab] = useState<string>(() => {
+    if (urlTab) return urlTab;
+    if (initialTab) return initialTab;
+    return '';
+  });
+
+  useEffect(() => {
+    if (urlTab && urlTab !== activeTab) {
+      setActiveTab(urlTab);
+    }
+  }, [urlTab, activeTab]);
+
+  useEffect(() => {
+    if (sectionGroups.length > 0) {
+      if (!activeTab || !sectionGroups.some((g) => g.section.id === activeTab)) {
+        setActiveTab(sectionGroups[0].section.id);
+      }
+    }
+  }, [sectionGroups, activeTab]);
+
+  const activeTabId = activeTab || sectionGroups[0]?.section.id || '';
+
+  const handleTabChange = (newTabId: string) => {
+    setActiveTab(newTabId);
+    const params = new URLSearchParams(searchParams.toString());
+    params.set('tab', newTabId);
+
+    // Keep only meters that belong to the new tab, drop others
+    const currentMeters = params.get('meters')?.split(',').filter(Boolean) || [];
+    if (currentMeters.length > 0) {
+      const newTabMeterIds = new Set(
+        meters
+          .filter((m) => (newTabId === '__uncategorized__' ? !m.section_id : m.section_id === newTabId))
+          .map((m) => m.id)
+      );
+      const remainingMeters = currentMeters.filter((id) => newTabMeterIds.has(id));
+      if (remainingMeters.length > 0) {
+        params.set('meters', remainingMeters.join(','));
+      } else {
+        params.delete('meters');
+      }
+    }
+
+    router.push(`/history?${params.toString()}`);
+  };
+
+  const tabs = useMemo(() => {
+    return sectionGroups.map(({ section, readings }) => ({
+      id: section.id,
+      label: section.name,
+      badge: readings.length,
+    }));
+  }, [sectionGroups]);
+
+  const currentGroup = useMemo(() => {
+    return sectionGroups.find((g) => g.section.id === activeTabId) || sectionGroups[0];
+  }, [sectionGroups, activeTabId]);
 
   return (
-    <>
-      <div className="flex flex-col gap-6">
-        {sectionGroups.map(({ section, readings: sectionReadings }) => (
-          <Card key={section.id} className="p-0 overflow-hidden">
-            <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-border bg-bg-elevated">
-              <div className="flex items-center gap-2">
-                <span className="text-lg">{section.icon || '📊'}</span>
-                <h3 className="font-semibold text-text-primary text-sm">{section.name}</h3>
-              </div>
-              <span className="text-xs text-text-muted">
-                {sectionReadings.length} reading{sectionReadings.length !== 1 ? 's' : ''}
-              </span>
-            </div>
+    <div className="space-y-3">
+      {tabs.length > 1 && (
+        <Tabs
+          tabs={tabs}
+          activeTab={activeTabId}
+          onChange={handleTabChange}
+        />
+      )}
 
+      {/* Section-Scoped Filters Toolbar — meter filter contains only meters of the active tab */}
+      <HistoryFilters
+        meters={meters}
+        sections={sections}
+        activeSectionId={activeTabId}
+        currentMeterIds={currentMeterIds}
+        currentFrom={currentFrom}
+        currentTo={currentTo}
+      />
+
+      {currentGroup && (
+        <div key={currentGroup.section.id} className="border border-border/80 rounded-[var(--radius-md)] bg-bg-elevated shadow-xs overflow-hidden">
+          {currentGroup.readings.length === 0 ? (
+            <div className="py-8 text-center text-text-muted">
+              <p className="text-xs font-semibold text-text-primary">No readings found for this section</p>
+              <p className="text-[11px] text-text-muted mt-0.5">Try clearing meter filters or adjusting your date range</p>
+            </div>
+          ) : (
             <SectionTable
-              readings={sectionReadings}
+              readings={currentGroup.readings}
               isAdmin={isAdmin}
               onEdit={handleOpenEdit}
               onDelete={handleDelete}
+              tierLabels={tierLabels}
+              section={currentGroup.section}
             />
-          </Card>
-        ))}
-      </div>
+          )}
+        </div>
+      )}
 
       {/* Edit Reading Modal — shared across all section tables */}
       <Modal
         open={!!editingReading}
         onClose={() => setEditingReading(null)}
         title="Edit Log Reading"
+        compact
       >
-        <form onSubmit={handleSaveEdit} className="flex flex-col gap-4">
-          <div className="bg-bg-elevated p-3 rounded-[var(--radius-md)] border border-border">
-            <span className="text-xs text-text-muted block">Meter</span>
-            <span className="text-sm font-semibold text-text-primary">
+        <form onSubmit={handleSaveEdit} className="flex flex-col gap-3">
+          <div className="bg-bg-elevated p-2.5 rounded-[var(--radius-sm)] border border-border">
+            <span className="text-[10px] text-text-muted uppercase font-semibold tracking-wider block">Meter</span>
+            <span className="text-xs font-bold text-text-primary">
               {editingReading?.meter?.name}
             </span>
           </div>
@@ -188,7 +265,6 @@ export function HistoryTable({ readings, userRole, sections }: HistoryTableProps
             value={editValue}
             onChange={(e) => setEditValue(e.target.value)}
             required
-            large
           />
 
           <Input
@@ -197,25 +273,25 @@ export function HistoryTable({ readings, userRole, sections }: HistoryTableProps
             value={editDate}
             onChange={(e) => setEditDate(e.target.value)}
             required
-            large
           />
 
-          <div className="flex gap-3 mt-2">
+          <div className="flex gap-2 mt-1">
             <Button
               type="button"
               variant="ghost"
+              size="sm"
               onClick={() => setEditingReading(null)}
               fullWidth
             >
               Cancel
             </Button>
-            <Button type="submit" variant="primary" loading={submitting} fullWidth>
+            <Button type="submit" variant="primary" size="sm" loading={submitting} fullWidth>
               Save Changes
             </Button>
           </div>
         </form>
       </Modal>
-    </>
+    </div>
   );
 }
 
@@ -226,97 +302,124 @@ interface SectionTableProps {
   isAdmin: boolean;
   onEdit: (reading: Reading) => void;
   onDelete: (reading: Reading) => void;
+  tierLabels: import('@/lib/types').CustomTierLabels;
+  section: MeterSection;
 }
 
-function SectionTable({ readings, isAdmin, onEdit, onDelete }: SectionTableProps) {
+function SectionTable({ readings, isAdmin, onEdit, onDelete, tierLabels, section }: SectionTableProps) {
+  const domain = getSectionDomain(section);
   return (
-    <div className="overflow-auto max-h-[600px]">
-      <table className="responsive-table table-sticky-col w-full text-sm border-separate border-spacing-0">
-        <thead>
-          <tr className="sticky top-0 z-10 bg-table-header">
-            <th className="px-2.5 py-1.5 text-left font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-table-header-border whitespace-nowrap bg-table-header">Date</th>
-            <th className="px-2.5 py-1.5 text-left font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-table-header-border">Meter</th>
-            <th className="px-2.5 py-1.5 text-left font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-table-header-border">Type</th>
-            <th className="px-2.5 py-1.5 text-right font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-table-header-border">Previous</th>
-            <th className="px-2.5 py-1.5 text-right font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-table-header-border">Current</th>
-            <th className="px-2.5 py-1.5 text-right font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-table-header-border">Difference</th>
-            <th className="px-2.5 py-1.5 text-left font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-table-header-border whitespace-nowrap">Logged By</th>
-            <th className="px-2.5 py-1.5 text-left font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-table-header-border whitespace-nowrap">Timestamp</th>
-            {isAdmin && (
-              <th className="px-2.5 py-1.5 text-right font-bold text-[11px] uppercase tracking-wider text-text-secondary border-b-2 border-table-header-border whitespace-nowrap">Actions</th>
-            )}
+    <div className="overflow-x-auto max-h-[600px] relative">
+      <table className="w-full text-xs border-collapse table-fixed min-w-[760px]">
+        <colgroup>
+          <col className="w-[90px]" />
+          <col className="w-[170px] sm:w-[210px]" />
+          <col className="w-[95px]" />
+          <col className="w-[95px]" />
+          <col className="w-[100px]" />
+          <col className="w-[110px]" />
+          <col className="w-[125px]" />
+          {isAdmin && <col className="w-[65px]" />}
+        </colgroup>
+        <thead className="sticky top-0 z-20 bg-table-header text-[10px] font-bold uppercase tracking-wider text-white border-b border-border select-none">
+          <tr>
+            <th className="px-2 py-1.5 text-center whitespace-nowrap text-white">Date</th>
+            <th className="sticky left-0 z-30 bg-table-header px-2.5 py-1.5 text-left text-white">Meter</th>
+            <th className="px-2 py-1.5 text-right whitespace-nowrap text-white">Previous</th>
+            <th className="px-2 py-1.5 text-right whitespace-nowrap text-white">Current</th>
+            <th className="px-2 py-1.5 text-right whitespace-nowrap text-white">Difference</th>
+            <th className="px-2 py-1.5 text-left whitespace-nowrap text-white">Logged By</th>
+            <th className="px-2 py-1.5 text-left whitespace-nowrap text-white">Timestamp</th>
+            {isAdmin && <th className="px-2 py-1.5 text-right whitespace-nowrap text-white">Actions</th>}
           </tr>
         </thead>
-        <tbody>
+        <tbody className="divide-y divide-border/60">
           {readings.map((reading, idx) => {
+            const nextOlder = readings.slice(idx + 1).find((r) => r.meter_id === reading.meter_id);
             const prevValue =
-              reading.usage != null
+              reading.is_reset
+                ? null
+                : reading.usage != null
                 ? Number(reading.reading_value) - Number(reading.usage)
+                : nextOlder
+                ? Number(nextOlder.reading_value)
                 : null;
 
             return (
               <tr
                 key={reading.id}
-                className={`border-b border-border transition-colors hover:bg-bg-surface-hover ${
-                  idx % 2 === 0 ? 'bg-bg-surface' : 'bg-bg-primary'
-                }`}
+                className="hover:bg-bg-surface-hover/70 transition-colors"
               >
-                <td className={`px-2.5 py-1.5 font-medium text-text-primary whitespace-nowrap ${idx % 2 === 0 ? 'bg-bg-surface' : 'bg-bg-primary'}`}>
+                <td className="px-2 py-1.5 text-center text-text-muted text-xs whitespace-nowrap">
                   {format(new Date(reading.reading_date), 'dd MMM yyyy')}
                 </td>
-                <td className="px-2.5 py-1.5 font-medium text-text-primary">
-                  {reading.meter?.name || '—'}
-                </td>
-                <td className="px-2.5 py-1.5">
-                  <Badge
-                    variant={
-                      reading.meter?.type === 'incoming' || reading.meter?.type === 'main'
-                        ? 'warning'
-                        : reading.meter?.type === 'outgoing_main' || reading.meter?.type === 'outgoing'
-                        ? 'accent'
-                        : 'success'
-                    }
-                  >
-                    {reading.meter?.type === 'incoming' || reading.meter?.type === 'main'
-                      ? '⚡ Incoming'
+                <td className="sticky left-0 z-10 bg-inherit px-2.5 py-1.5 text-xs border-r border-border/30">
+                  <span className="font-semibold text-text-primary truncate block leading-tight" title={reading.meter?.name}>
+                    {reading.meter?.name || '—'}
+                  </span>
+                  <span className={`text-[10px] font-medium leading-tight block mt-0.5 ${
+                    domain === 'hour'
+                      ? getHourGroupKey(reading.meter) === 'Compressor'
+                        ? 'text-accent'
+                        : getHourGroupKey(reading.meter) === 'Pump'
+                        ? 'text-warning'
+                        : getHourGroupKey(reading.meter) === 'Generator'
+                        ? 'text-success'
+                        : 'text-text-muted'
+                      : reading.meter?.type === 'incoming' || reading.meter?.type === 'main'
+                      ? 'text-warning'
                       : reading.meter?.type === 'outgoing_main' || reading.meter?.type === 'outgoing'
-                      ? '⚡ Outgoing (Main)'
-                      : '📊 Outgoing (Sub)'}
-                  </Badge>
+                      ? 'text-accent'
+                      : reading.meter?.type === 'outgoing_sub_sub'
+                      ? 'text-danger'
+                      : 'text-success'
+                  }`}>
+                    {getMeterTierLabel(reading.meter, domain, tierLabels)}
+                  </span>
                 </td>
-                <td className="px-2.5 py-1.5 text-right text-text-secondary tabular-nums">
-                  {prevValue != null ? formatReadingValue(prevValue) : '—'}
+                <td className="px-2 py-1.5 text-right text-text-secondary tabular-nums text-xs">
+                  {reading.is_reset ? (
+                    <span className="text-warning text-[11px] font-semibold">0.00</span>
+                  ) : prevValue != null ? (
+                    formatReadingValue(prevValue)
+                  ) : (
+                    '—'
+                  )}
                 </td>
-                <td className="px-2.5 py-1.5 text-right font-medium text-text-primary tabular-nums">
+                <td className="px-2 py-1.5 text-right font-semibold text-text-primary tabular-nums text-xs">
                   {formatReadingValue(Number(reading.reading_value))}
                 </td>
-                <td className="px-2.5 py-1.5 text-right">
-                  {reading.usage != null ? (
-                    <span className="font-bold text-accent tabular-nums">
+                <td className="px-2 py-1.5 text-right tabular-nums text-xs font-semibold">
+                  {reading.is_reset ? (
+                    <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-warning bg-warning/15 px-1.5 py-0.5 rounded-[var(--radius-sm)] border border-warning/30">
+                      First reading
+                    </span>
+                  ) : reading.usage != null ? (
+                    <span className="font-bold text-accent">
                       {formatReadingValue(Number(reading.usage))}
                     </span>
                   ) : (
-                    <span className="text-text-muted text-xs">First reading</span>
+                    <span className="text-text-muted text-xs">—</span>
                   )}
                 </td>
-                <td className="px-2.5 py-1.5 text-text-secondary whitespace-nowrap">
+                <td className="px-2 py-1.5 text-text-secondary text-xs truncate max-w-[120px]">
                   {reading.profile?.full_name || '—'}
                 </td>
-                <td className="px-2.5 py-1.5 text-text-muted text-xs whitespace-nowrap">
+                <td className="px-2 py-1.5 text-text-muted text-[11px] whitespace-nowrap">
                   {format(new Date(reading.created_at), 'dd MMM yyyy, HH:mm')}
                 </td>
                 {isAdmin && (
-                  <td className="px-2.5 py-1.5 text-right">
+                  <td className="px-2 py-1.5 text-right">
                     <div className="flex items-center justify-end gap-1">
                       <button
                         type="button"
                         onClick={() => onEdit(reading)}
                         title="Edit reading"
                         aria-label="Edit reading"
-                        className="w-7 h-7 inline-flex items-center justify-center rounded-[var(--radius-sm)]
+                        className="w-5.5 h-5.5 inline-flex items-center justify-center rounded-[var(--radius-sm)]
                           text-text-muted hover:text-accent hover:bg-accent/10 transition-colors cursor-pointer"
                       >
-                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                           <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
                         </svg>
                       </button>
@@ -325,14 +428,12 @@ function SectionTable({ readings, isAdmin, onEdit, onDelete }: SectionTableProps
                         onClick={() => onDelete(reading)}
                         title="Delete reading"
                         aria-label="Delete reading"
-                        className="w-7 h-7 inline-flex items-center justify-center rounded-[var(--radius-sm)]
+                        className="w-5.5 h-5.5 inline-flex items-center justify-center rounded-[var(--radius-sm)]
                           text-text-muted hover:text-danger hover:bg-danger/10 transition-colors cursor-pointer"
                       >
-                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                           <polyline points="3 6 5 6 21 6" />
                           <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-                          <line x1="10" y1="11" x2="10" y2="17" />
-                          <line x1="14" y1="11" x2="14" y2="17" />
                         </svg>
                       </button>
                     </div>
