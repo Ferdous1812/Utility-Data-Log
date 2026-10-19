@@ -703,7 +703,7 @@ export default function DashboardPage() {
               {/* Stats Cards */}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 stagger-children">
                 <StatCard
-                  label={`Total ${tierLabels.incoming || 'Incoming'} Power`}
+                  label={`${tierLabels.incoming || 'Incoming'} Power`}
                   value={`${totalIncoming.toLocaleString(undefined, { maximumFractionDigits: 0 })} kWh`}
                   icon={
                     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -825,7 +825,7 @@ export default function DashboardPage() {
                 {/* Gas Stat Cards */}
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4 stagger-children">
                   <StatCard
-                    label="Total RMS Incomer"
+                    label="RMS Incomer"
                     value={`${totalGasIncomer.toLocaleString(undefined, { maximumFractionDigits: 0 })} ${gasUnit}`}
                     accentColor="var(--color-warning)"
                     icon={
@@ -835,7 +835,7 @@ export default function DashboardPage() {
                     }
                   />
                   <StatCard
-                    label="Total Consumption In Headers"
+                    label="Consumption In Headers"
                     value={`${totalGasHeaders.toLocaleString(undefined, { maximumFractionDigits: 0 })} ${gasUnit}`}
                     accentColor="var(--color-accent)"
                     icon={
@@ -847,7 +847,7 @@ export default function DashboardPage() {
                     }
                   />
                   <StatCard
-                    label="Total Consumption In Appliances"
+                    label="Consumption In Appliances"
                     value={`${totalGasAppliances.toLocaleString(undefined, { maximumFractionDigits: 0 })} ${gasUnit}`}
                     accentColor="var(--color-success)"
                     icon={
