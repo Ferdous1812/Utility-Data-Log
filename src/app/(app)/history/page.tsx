@@ -43,10 +43,19 @@ export default async function HistoryPage({ searchParams }: HistoryPageProps) {
     dateFrom: params.from,
     dateTo: params.to,
   });
+  // A reading can exist both in the legacy `readings` table and in the branch logs
+  // (copied earlier with the same id). Branch logs win, so every reading shows once.
+  const branchIds = new Set(branchReadings.map((r) => r.id));
+  const seenIds = new Set<string>();
   const readings = [
-    ...legacyReadings.filter((r) => !splitIds.has(r.meter_id)),
+    ...legacyReadings.filter((r) => !splitIds.has(r.meter_id) && !branchIds.has(r.id)),
     ...branchReadings,
   ]
+    .filter((r) => {
+      if (seenIds.has(r.id)) return false;
+      seenIds.add(r.id);
+      return true;
+    })
     .sort(
       (a, b) =>
         b.reading_date.localeCompare(a.reading_date) ||
