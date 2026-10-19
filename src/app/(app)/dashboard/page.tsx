@@ -727,7 +727,7 @@ export default function DashboardPage() {
                 />
 
                 <StatCard
-                  label={`${tierLabels.outgoing_sub || 'Outgoing'} Power (Sub)`}
+                  label={`${tierLabels.outgoing_sub || 'Outgoing'} Power`}
                   value={`${totalOutgoingSub.toLocaleString(undefined, { maximumFractionDigits: 0 })} kWh`}
                   icon={
                     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
