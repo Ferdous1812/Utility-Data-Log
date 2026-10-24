@@ -699,88 +699,88 @@ export default function DashboardPage() {
 
           {/* ─── Energy Meter Tab ─── */}
           {activeTab === 'energy' && (
-            <div className="space-y-6">
-              {/* Stats Cards */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 stagger-children">
-                <StatCard
-                  label={`${tierLabels.incoming || 'Incoming'} Power`}
-                  value={`${totalIncoming.toLocaleString(undefined, { maximumFractionDigits: 0 })} kWh`}
-                  icon={
-                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
-                    </svg>
-                  }
-                  trend={totalIncomingPrev > 0 ? { value: percentChange, label: 'vs previous month' } : undefined}
-                  accentColor="var(--color-warning)"
-                />
+            <div className="space-y-4">
+              <div>
+                <h2 className="text-lg font-semibold text-text-primary mb-1">Energy Meters</h2>
+                <p className="text-xs text-text-secondary mb-4">
+                  Energy (kWh) meters · last {comparisonRange} month{comparisonRange > 1 ? 's' : ''}, ending {refLabel}, grouped by hierarchy tier
+                </p>
 
-                <StatCard
-                  label={`${tierLabels.outgoing_main || 'Outgoing'} Power`}
-                  value={`${totalOutgoingMain.toLocaleString(undefined, { maximumFractionDigits: 0 })} kWh`}
-                  icon={
-                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
-                    </svg>
-                  }
-                  trend={totalOutgoingMainPrev > 0 ? { value: outgoingMainChange, label: 'vs previous month' } : undefined}
-                  accentColor="var(--color-accent)"
-                />
-
-                <StatCard
-                  label={`${tierLabels.outgoing_sub || 'Outgoing'} Power`}
-                  value={`${totalOutgoingSub.toLocaleString(undefined, { maximumFractionDigits: 0 })} kWh`}
-                  icon={
-                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <rect x="3" y="3" width="18" height="18" rx="2" />
-                      <line x1="9" y1="3" x2="9" y2="21" />
-                    </svg>
-                  }
-                  trend={totalOutgoingSubPrev > 0 ? { value: outgoingSubChange, label: 'vs previous month' } : undefined}
-                  accentColor="var(--color-success)"
-                />
-
-                {outgoingSubSubMeters.length > 0 && (
+                {/* Stats Cards */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-4 stagger-children">
                   <StatCard
-                    label={`${tierLabels.outgoing_sub_sub || 'Sub-Sub'} Power`}
-                    value={`${totalOutgoingSubSub.toLocaleString(undefined, { maximumFractionDigits: 0 })} kWh`}
+                    label={`${tierLabels.incoming || 'Incoming'} Power`}
+                    value={`${totalIncoming.toLocaleString(undefined, { maximumFractionDigits: 0 })} kWh`}
+                    icon={
+                      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
+                      </svg>
+                    }
+                    trend={totalIncomingPrev > 0 ? { value: percentChange, label: 'vs previous month' } : undefined}
+                    accentColor="var(--color-warning)"
+                  />
+
+                  <StatCard
+                    label={`${tierLabels.outgoing_main || 'Outgoing'} Power`}
+                    value={`${totalOutgoingMain.toLocaleString(undefined, { maximumFractionDigits: 0 })} kWh`}
+                    icon={
+                      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+                      </svg>
+                    }
+                    trend={totalOutgoingMainPrev > 0 ? { value: outgoingMainChange, label: 'vs previous month' } : undefined}
+                    accentColor="var(--color-accent)"
+                  />
+
+                  <StatCard
+                    label={`${tierLabels.outgoing_sub || 'Outgoing'} Power`}
+                    value={`${totalOutgoingSub.toLocaleString(undefined, { maximumFractionDigits: 0 })} kWh`}
                     icon={
                       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                         <rect x="3" y="3" width="18" height="18" rx="2" />
                         <line x1="9" y1="3" x2="9" y2="21" />
-                        <line x1="15" y1="3" x2="15" y2="21" />
                       </svg>
                     }
-                    accentColor="var(--color-danger)"
+                    trend={totalOutgoingSubPrev > 0 ? { value: outgoingSubChange, label: 'vs previous month' } : undefined}
+                    accentColor="var(--color-success)"
                   />
-                )}
 
-                <StatCard
-                  label="System Loss"
-                  value={`${Math.abs(systemLoss).toLocaleString(undefined, { maximumFractionDigits: 0 })} kWh`}
-                  icon={
-                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
-                      <line x1="12" y1="9" x2="12" y2="13" />
-                      <line x1="12" y1="17" x2="12.01" y2="17" />
-                    </svg>
-                  }
-                  accentColor={
-                    systemLossPercent > 5
-                      ? 'var(--color-danger)'
-                      : systemLossPercent > 2
-                        ? 'var(--color-warning)'
-                        : 'var(--color-success)'
-                  }
-                  trend={{ value: systemLossPercent, label: 'of incoming' }}
-                />
-              </div>
+                  {outgoingSubSubMeters.length > 0 && (
+                    <StatCard
+                      label={`${tierLabels.outgoing_sub_sub || 'Sub-Sub'} Power`}
+                      value={`${totalOutgoingSubSub.toLocaleString(undefined, { maximumFractionDigits: 0 })} kWh`}
+                      icon={
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <rect x="3" y="3" width="18" height="18" rx="2" />
+                          <line x1="9" y1="3" x2="9" y2="21" />
+                          <line x1="15" y1="3" x2="15" y2="21" />
+                        </svg>
+                      }
+                      accentColor="var(--color-danger)"
+                    />
+                  )}
 
-              {/* Meter-wise Consumption */}
-              <div>
-                <h2 className="text-lg font-semibold text-text-primary mb-1">Meter-wise Consumption</h2>
-                <p className="text-xs text-text-secondary mb-4">
-                  Energy (kWh) meters · last {comparisonRange} month{comparisonRange > 1 ? 's' : ''}, ending {refLabel}, grouped by hierarchy tier
-                </p>
+                  <StatCard
+                    label="System Loss"
+                    value={`${Math.abs(systemLoss).toLocaleString(undefined, { maximumFractionDigits: 0 })} kWh`}
+                    icon={
+                      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+                        <line x1="12" y1="9" x2="12" y2="13" />
+                        <line x1="12" y1="17" x2="12.01" y2="17" />
+                      </svg>
+                    }
+                    accentColor={
+                      systemLossPercent > 5
+                        ? 'var(--color-danger)'
+                        : systemLossPercent > 2
+                          ? 'var(--color-warning)'
+                          : 'var(--color-success)'
+                    }
+                    trend={{ value: systemLossPercent, label: 'of incoming' }}
+                  />
+                </div>
+
                 <div className="grid grid-cols-1 gap-4">
                   <FilterableChartCard title={<>{getEnergyGroupLabel('incoming', tierLabels)}</>} headerExtra={<><span className="text-xs text-text-muted">{incomingMonthlyRows.filter((r) => !r.defaultHidden).length} meters</span></>}
                       months={monthsList}
