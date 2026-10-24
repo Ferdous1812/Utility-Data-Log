@@ -45,6 +45,11 @@ export function Button({
   disabled,
   ...props
 }: ButtonProps) {
+  const hasCustomText = /\btext-(xs|sm|base|lg|xl|\d)/.test(className);
+  const sizeClass = hasCustomText
+    ? sizeClasses[size].replace(/\btext-(xs|sm|base|lg|xl)\b/, '').trim()
+    : sizeClasses[size];
+
   return (
     <button
       className={`
@@ -52,7 +57,7 @@ export function Button({
         transition-all duration-200 cursor-pointer
         disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none
         ${variantClasses[variant]}
-        ${sizeClasses[size]}
+        ${sizeClass}
         ${fullWidth ? 'w-full' : ''}
         ${className}
       `}
