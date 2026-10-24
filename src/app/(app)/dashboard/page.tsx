@@ -13,6 +13,7 @@ import { colorAt } from '@/lib/chartColors';
 import { format, subMonths, endOfMonth, startOfMonth, subDays, addDays } from 'date-fns';
 import type { Meter, MeterSection } from '@/lib/types';
 import { useTierLabels, getEnergyGroupLabel, getGasGroupLabel, getHourGroupKey } from '@/lib/useTierLabels';
+import { useSyncedMonth } from '@/context/MonthContext';
 
 type ComparisonRange = 1 | 3 | 6 | 12;
 
@@ -67,9 +68,65 @@ export default function DashboardPage() {
   // Default reference month = the month before the current month.
   const defaultRef = useMemo(() => subMonths(now, 1), [now]);
 
-  const [refMonth, setRefMonth] = useState(defaultRef.getMonth() + 1);
-  const [refYear, setRefYear] = useState(defaultRef.getFullYear());
+  const {
+    selectedMonth: syncedMonth,
+    setSelectedMonth,
+    year: syncedYear,
+    month: syncedMonthNum,
+    setYearAndMonth,
+  } = useSyncedMonth();
+
+  const [refMonth, setRefMonth] = useState(() => syncedMonthNum || defaultRef.getMonth() + 1);
+  const [refYear, setRefYear] = useState(() => syncedYear || defaultRef.getFullYear());
   const [comparisonRange, setComparisonRange] = useState<ComparisonRange>(1);
+
+  // If dashboard is opened with ?month= in URL, sync it
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const m = params.get('month');
+      if (m && m.includes('-')) {
+        const [y, mon] = m.split('-').map(Number);
+        if (y && mon && !isNaN(y) && !isNaN(mon)) {
+          setRefMonth(mon);
+          setRefYear(y);
+          setSelectedMonth(m);
+        }
+      }
+    }
+  }, [setSelectedMonth]);
+
+  // Keep local state in sync when syncedMonth changes from outside (e.g. other pages)
+  useEffect(() => {
+    if (syncedMonthNum && syncedYear) {
+      if (syncedMonthNum !== refMonth || syncedYear !== refYear) {
+        setRefMonth(syncedMonthNum);
+        setRefYear(syncedYear);
+      }
+    }
+  }, [syncedMonthNum, syncedYear]);
+
+  const handleRefMonthChange = useCallback((newMonth: number) => {
+    setRefMonth(newMonth);
+    setYearAndMonth(refYear, newMonth);
+    const mStr = `${refYear}-${String(newMonth).padStart(2, '0')}`;
+    if (typeof window !== 'undefined') {
+      const url = new URL(window.location.href);
+      url.searchParams.set('month', mStr);
+      window.history.replaceState(null, '', url.pathname + url.search);
+    }
+  }, [refYear, setYearAndMonth]);
+
+  const handleRefYearChange = useCallback((newYear: number) => {
+    setRefYear(newYear);
+    setYearAndMonth(newYear, refMonth);
+    const mStr = `${newYear}-${String(refMonth).padStart(2, '0')}`;
+    if (typeof window !== 'undefined') {
+      const url = new URL(window.location.href);
+      url.searchParams.set('month', mStr);
+      window.history.replaceState(null, '', url.pathname + url.search);
+    }
+  }, [refMonth, setYearAndMonth]);
 
   const [meters, setMeters] = useState<Meter[]>([]);
   const [sections, setSections] = useState<MeterSection[]>([]);
@@ -647,7 +704,7 @@ export default function DashboardPage() {
             <div className="w-[104px]">
               <Select
                 value={refMonth}
-                onChange={(e) => setRefMonth(Number(e.target.value))}
+                onChange={(e) => handleRefMonthChange(Number(e.target.value))}
                 options={MONTH_NAMES.map((name, idx) => ({ value: String(idx + 1), label: name }))}
                 className="!py-1.5 !text-xs !pl-2.5 !pr-7"
               />
@@ -655,7 +712,7 @@ export default function DashboardPage() {
             <div className="w-[82px]">
               <Select
                 value={refYear}
-                onChange={(e) => setRefYear(Number(e.target.value))}
+                onChange={(e) => handleRefYearChange(Number(e.target.value))}
                 options={yearOptions.map((y) => ({ value: String(y), label: String(y) }))}
                 className="!py-1.5 !text-xs !pl-2.5 !pr-7"
               />

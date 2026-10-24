@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useTransition, useMemo } from 'react';
+import React, { useState, useTransition, useMemo, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { format } from 'date-fns';
 import type { HourMeter, HourMeterDevice, HourReadingLog } from '@/types/hour';
@@ -13,6 +13,7 @@ import { StatCard } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { ToastProvider } from '@/components/ui/Toast';
 import { useTierLabels } from '@/lib/useTierLabels';
+import { useSyncedMonth } from '@/context/MonthContext';
 
 function HourMetersContent({
   meters,
@@ -33,6 +34,20 @@ function HourMetersContent({
   const [isPending, startTransition] = useTransition();
   const [manageModalOpen, setManageModalOpen] = useState(false);
   const tierLabels = useTierLabels();
+  const { selectedMonth: syncedMonth, setSelectedMonth } = useSyncedMonth();
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const searchHasMonth = window.location.search.includes('month=');
+      if (searchHasMonth && selectedMonth && selectedMonth !== syncedMonth) {
+        setSelectedMonth(selectedMonth);
+      } else if (!searchHasMonth && syncedMonth && syncedMonth !== selectedMonth) {
+        startTransition(() => {
+          router.replace(`/hour-meters?month=${syncedMonth}`);
+        });
+      }
+    }
+  }, [selectedMonth, syncedMonth, setSelectedMonth, router]);
 
   // Month navigation logic
   const [y, m] = selectedMonth.split('-');
@@ -41,6 +56,7 @@ function HourMetersContent({
 
   const handleMonthChange = (newMonth: string) => {
     if (!newMonth || !newMonth.includes('-')) return;
+    setSelectedMonth(newMonth);
     startTransition(() => {
       router.push(`/hour-meters?month=${newMonth}`);
     });

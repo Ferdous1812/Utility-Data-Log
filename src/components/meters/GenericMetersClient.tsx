@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useTransition } from 'react';
+import React, { useState, useTransition, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { format } from 'date-fns';
 import type { EnergyMeter, EnergyMeterDevice, EnergyReadingLog } from '@/types/energy';
@@ -11,6 +11,7 @@ import { ManageEnergyMetersModal } from '@/components/energy/ManageEnergyMetersM
 import { StatCard } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { ToastProvider } from '@/components/ui/Toast';
+import { useSyncedMonth } from '@/context/MonthContext';
 
 function GenericMetersContent({
   meters,
@@ -36,6 +37,20 @@ function GenericMetersContent({
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [manageModalOpen, setManageModalOpen] = useState(false);
+  const { selectedMonth: syncedMonth, setSelectedMonth } = useSyncedMonth();
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const searchHasMonth = window.location.search.includes('month=');
+      if (searchHasMonth && selectedMonth && selectedMonth !== syncedMonth) {
+        setSelectedMonth(selectedMonth);
+      } else if (!searchHasMonth && syncedMonth && syncedMonth !== selectedMonth) {
+        startTransition(() => {
+          router.replace(`${routePath}?month=${syncedMonth}`);
+        });
+      }
+    }
+  }, [selectedMonth, syncedMonth, setSelectedMonth, routePath, router]);
 
   const stats = computeEnergyDashboardStats(meters, devices, logs);
 
@@ -46,6 +61,7 @@ function GenericMetersContent({
 
   const handleMonthChange = (newMonth: string) => {
     if (!newMonth || !newMonth.includes('-')) return;
+    setSelectedMonth(newMonth);
     startTransition(() => {
       router.push(`${routePath}?month=${newMonth}`);
     });

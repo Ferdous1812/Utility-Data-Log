@@ -3,6 +3,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useSyncedMonth } from '@/context/MonthContext';
 import type { UserRole } from '@/lib/types';
 
 interface SidebarProps {
@@ -113,10 +114,13 @@ const navItems: NavItem[] = [
 
 export function Sidebar({ userRole, collapsed, onToggle, mobileOpen = false, onMobileClose }: SidebarProps) {
   const pathname = usePathname();
+  const { selectedMonth } = useSyncedMonth();
 
   const filteredItems = navItems.filter(
     (item) => !item.adminOnly || userRole === 'admin'
   );
+
+  const syncedRoutes = ['/dashboard', '/energy-meters', '/hour-meters', '/gas-meters'];
 
   return (
     <>
@@ -167,10 +171,13 @@ export function Sidebar({ userRole, collapsed, onToggle, mobileOpen = false, onM
         <nav className="flex-1 py-3 px-2 flex flex-col gap-1 overflow-y-auto">
           {filteredItems.map((item) => {
             const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
+            const targetHref = syncedRoutes.includes(item.href) && selectedMonth
+              ? `${item.href}?month=${selectedMonth}`
+              : item.href;
             return (
               <Link
                 key={item.href}
-                href={item.href}
+                href={targetHref}
                 onClick={onMobileClose}
                 title={collapsed ? item.label : undefined}
                 className={`

@@ -1,4 +1,4 @@
-import { format, subDays } from 'date-fns';
+import { format, subDays, subMonths } from 'date-fns';
 import {
   getGasMeters,
   getGasMeterDevices,
@@ -15,8 +15,8 @@ export default async function GasMetersPage({
   searchParams: Promise<{ month?: string }>;
 }) {
   const { month } = await searchParams;
-  const currentMonthStr = format(new Date(), 'yyyy-MM');
-  const targetMonth = month && month.includes('-') ? month : currentMonthStr;
+  const defaultMonthStr = format(subMonths(new Date(), 1), 'yyyy-MM');
+  const targetMonth = month && month.includes('-') ? month : defaultMonthStr;
 
   const [y, m] = targetMonth.split('-');
   const monthDate = new Date(parseInt(y, 10), parseInt(m, 10) - 1, 1);
