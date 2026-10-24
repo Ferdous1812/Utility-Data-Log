@@ -57,6 +57,7 @@ export default function LogReadingPage() {
   const [loadingPrevious, setLoadingPrevious] = useState(false);
   const [savingIds, setSavingIds] = useState<Set<string>>(new Set());
   const [submittedIds, setSubmittedIds] = useState<Set<string>>(new Set());
+  const [savingAll, setSavingAll] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
 
   // Fetch current user's role (edit access is admin-only, same as History page)
@@ -419,6 +420,105 @@ export default function LogReadingPage() {
     });
   };
 
+  // Save All: batch-save every row that has an unsaved, non-empty current value
+  const handleSaveAll = async () => {
+    // Collect rows that qualify: have a non-empty value AND are not already submitted
+    const unsavedRows = rows.filter(
+      (r) => r.currentValue.trim() !== '' && !submittedIds.has(r.meter.id)
+    );
+
+    if (unsavedRows.length === 0) {
+      addToast('info', 'No unsaved readings to save.');
+      return;
+    }
+
+    // Validate all qualifying rows first
+    for (const row of unsavedRows) {
+      const val = parseFloat(row.currentValue);
+      if (isNaN(val) || val < 0) {
+        addToast(
+          'error',
+          `Invalid reading for "${row.meter.name}". Must be a non-negative number. Fix it before using Save All.`
+        );
+        return;
+      }
+    }
+
+    setSavingAll(true);
+    // Mark all qualifying meters as saving
+    setSavingIds((prev) => {
+      const next = new Set(prev);
+      unsavedRows.forEach((r) => next.add(r.meter.id));
+      return next;
+    });
+
+    let successCount = 0;
+    let failCount = 0;
+
+    for (const row of unsavedRows) {
+      const val = parseFloat(row.currentValue);
+      const isBranch = !!(row.meter as any)._branch;
+
+      const result = isBranch
+        ? row.readingId
+          ? await updateBranchReading(row.readingId, {
+              reading_value: val,
+              reading_date: currentReadingDate,
+              is_reset: row.isReset,
+            })
+          : await logBranchReading({
+              device_id: row.meter.id,
+              reading_value: val,
+              reading_date: currentReadingDate,
+              is_reset: row.isReset,
+            })
+        : row.readingId
+        ? await updateReadingAction(row.readingId, {
+            reading_value: val,
+            reading_date: currentReadingDate,
+            is_reset: row.isReset,
+          })
+        : await logReading({
+            meter_id: row.meter.id,
+            reading_value: val,
+            reading_date: currentReadingDate,
+            is_reset: row.isReset,
+          });
+
+      if (result.success) {
+        const newReadingId = (result as { readingId?: string }).readingId;
+        setRows((prev) =>
+          prev.map((r) =>
+            r.meter.id === row.meter.id
+              ? { ...r, readingId: newReadingId ?? r.readingId }
+              : r
+          )
+        );
+        setSubmittedIds((prev) => new Set(prev).add(row.meter.id));
+        successCount++;
+      } else {
+        addToast('error', `${row.meter.name}: ${result.message}`);
+        failCount++;
+      }
+
+      // Remove this meter from saving set
+      setSavingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(row.meter.id);
+        return next;
+      });
+    }
+
+    setSavingAll(false);
+
+    if (successCount > 0) {
+      addToast(
+        'success',
+        `Saved ${successCount} reading${successCount > 1 ? 's' : ''} successfully${failCount > 0 ? ` (${failCount} failed)` : ''}.`
+      );
+    }
+  };
+
   // Unlock a saved row for editing again
   const handleEditRow = (meterId: string) => {
     setSubmittedIds((prev) => {
@@ -664,6 +764,28 @@ export default function LogReadingPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={handleSaveAll}
+            disabled={savingAll || rows.length === 0 || rows.every((r) => r.currentValue.trim() === '' || submittedIds.has(r.meter.id))}
+            icon={
+              savingAll ? (
+                <svg className="animate-spin" width="14" height="14" viewBox="0 0 24 24" fill="none">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                </svg>
+              ) : (
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
+                  <polyline points="17 21 17 13 7 13 7 21" />
+                  <polyline points="7 3 7 8 15 8" />
+                </svg>
+              )
+            }
+          >
+            {savingAll ? 'Saving...' : 'Save All'}
+          </Button>
           <Button
             variant="outline"
             size="sm"

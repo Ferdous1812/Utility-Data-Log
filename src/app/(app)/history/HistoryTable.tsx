@@ -309,7 +309,7 @@ interface SectionTableProps {
 function SectionTable({ readings, isAdmin, onEdit, onDelete, tierLabels, section }: SectionTableProps) {
   const domain = getSectionDomain(section);
   return (
-    <div className="overflow-x-auto max-h-[600px] relative">
+    <div className="overflow-x-auto max-h-[calc(100vh-230px)] relative">
       <table className="w-full text-xs border-collapse table-fixed min-w-[760px]">
         <colgroup>
           <col className="w-[90px]" />

@@ -966,7 +966,7 @@ function DomainMeterBadge({ meter, domain, tierLabels }: { meter: Meter; domain:
                             </p>
                           </div>
                         ) : (
-                          <div className="overflow-x-auto max-h-[65vh]">
+                          <div className="overflow-x-auto max-h-[calc(100vh-230px)] relative">
                             <table className="w-full text-xs border-collapse table-fixed min-w-[760px]">
                               <colgroup>
                                 <col className="w-[220px] sm:w-[260px]" />
@@ -1134,7 +1134,7 @@ function DomainMeterBadge({ meter, domain, tierLabels }: { meter: Meter; domain:
                       </span>
                     </div>
                   </div>
-                  <div className="overflow-x-auto max-h-[65vh]">
+                  <div className="overflow-x-auto max-h-[calc(100vh-230px)] relative">
                     <table className="w-full text-xs border-collapse table-fixed min-w-[760px]">
                       <colgroup>
                         <col className="w-[220px] sm:w-[260px]" />
@@ -1167,7 +1167,7 @@ function DomainMeterBadge({ meter, domain, tierLabels }: { meter: Meter; domain:
           ) : (
             /* Fallback single table when no sections are defined */
             <div className="border border-border/80 rounded-[var(--radius-md)] bg-bg-elevated shadow-xs overflow-hidden">
-              <div className="overflow-x-auto max-h-[65vh]">
+              <div className="overflow-x-auto max-h-[calc(100vh-230px)] relative">
                 <table className="w-full text-xs border-collapse table-fixed min-w-[760px]">
                   <colgroup>
                     <col className="w-[220px] sm:w-[260px]" />
