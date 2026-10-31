@@ -86,7 +86,7 @@ export default async function HistoryPage({ searchParams }: HistoryPageProps) {
   const distinctMetersCount = new Set(readings.map((r) => r.meter_id)).size;
 
   return (
-    <div className="max-w-7xl mx-auto space-y-4 animate-fade-in">
+    <div className="max-w-7xl mx-auto space-y-3.5 animate-fade-in">
       {/* Page Header with Export */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-1 border-b border-border/40">
         <div>

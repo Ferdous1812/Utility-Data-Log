@@ -474,12 +474,20 @@ export default function SettingsPage() {
     (m) => !m.parent_meter_id || !meterMap.has(m.parent_meter_id)
   )), [subSubMeters, meterMap, sortMetersList]);
 
-  const expandAllMeters = () => setCollapsedMeterIds(new Set());
-  const collapseAllMeters = () => {
-    const parentIds = meters
+  const allParentIds = useMemo(() => {
+    return meters
       .filter((m) => meters.some((child) => child.parent_meter_id === m.id))
       .map((m) => m.id);
-    setCollapsedMeterIds(new Set(parentIds));
+  }, [meters]);
+
+  const isAllMetersExpanded = collapsedMeterIds.size === 0;
+
+  const toggleExpandCollapseMeters = () => {
+    if (isAllMetersExpanded) {
+      setCollapsedMeterIds(new Set(allParentIds));
+    } else {
+      setCollapsedMeterIds(new Set());
+    }
   };
 
   const handleMoveMeterInList = async (
@@ -737,7 +745,7 @@ function DomainMeterBadge({ meter, domain, tierLabels }: { meter: Meter; domain:
   };
 
   return (
-    <div className="max-w-7xl mx-auto animate-fade-in space-y-4">
+    <div className="max-w-7xl mx-auto animate-fade-in space-y-3.5">
       {/* Page Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-1 border-b border-border/40">
         <div>
@@ -781,7 +789,7 @@ function DomainMeterBadge({ meter, domain, tierLabels }: { meter: Meter; domain:
           <div className="w-6 h-6 border-2 border-accent border-t-transparent rounded-full animate-spin" />
         </div>
       ) : (
-        <div className="space-y-4">
+        <div className="space-y-3.5">
           {/* Section Tabs & Quick Rename */}
           <div className="flex items-center justify-between gap-2 flex-wrap mb-1">
             {sectionTabs.length > 0 && (
@@ -823,7 +831,7 @@ function DomainMeterBadge({ meter, domain, tierLabels }: { meter: Meter; domain:
               </div>
             </div>
           ) : sections.length > 0 ? (
-            <div className="space-y-4">
+            <div className="space-y-3.5">
               {activeSectionId !== '__uncategorized__' &&
                 sections
                   .filter((sec) => sec.id === (activeSectionId || sections[0]?.id))
@@ -905,24 +913,15 @@ function DomainMeterBadge({ meter, domain, tierLabels }: { meter: Meter; domain:
 
                           <div className="flex items-center gap-1.5">
                             {secMeters.length > 0 && domain !== 'hour' && (
-                              <div className="flex items-center gap-1 text-[11px]">
-                                <button
-                                  type="button"
-                                  onClick={expandAllMeters}
-                                  className="px-2 py-0.5 rounded bg-bg-surface hover:bg-bg-surface-hover text-accent font-medium transition-colors border border-border/60 cursor-pointer"
-                                  title="Expand all branches"
-                                >
-                                  ▼ Expand All
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={collapseAllMeters}
-                                  className="px-2 py-0.5 rounded bg-bg-surface hover:bg-bg-surface-hover text-text-secondary font-medium transition-colors border border-border/60 cursor-pointer"
-                                  title="Collapse all branches"
-                                >
-                                  ► Collapse All
-                                </button>
-                              </div>
+                              <button
+                                type="button"
+                                onClick={toggleExpandCollapseMeters}
+                                className="flex items-center gap-1 px-2 py-0.5 rounded bg-bg-surface hover:bg-bg-surface-hover text-accent font-medium transition-colors border border-border/60 cursor-pointer text-[11px]"
+                                title={isAllMetersExpanded ? 'Collapse all branches' : 'Expand all branches'}
+                              >
+                                <span className="text-[10px]">▼</span>
+                                <span>{isAllMetersExpanded ? 'Collapse All' : 'Expand All'}</span>
+                              </button>
                             )}
                             <button
                               type="button"

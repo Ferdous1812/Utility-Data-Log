@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { Sidebar } from '@/components/Sidebar';
 import { Navbar } from '@/components/Navbar';
-import { MonthProvider } from '@/context/MonthContext';
 import type { Profile } from '@/lib/types';
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
@@ -63,30 +62,28 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <MonthProvider>
-      <div className="min-h-screen bg-bg-primary">
-        <Sidebar
-          userRole={profile.role}
-          collapsed={collapsed}
-          onToggle={() => setCollapsed(!collapsed)}
-          mobileOpen={mobileNavOpen}
-          onMobileClose={() => setMobileNavOpen(false)}
-        />
-        <Navbar
-          profile={profile}
-          sidebarCollapsed={collapsed}
-          onMenuClick={() => setMobileNavOpen(true)}
-        />
+    <div className="min-h-screen bg-bg-primary">
+      <Sidebar
+        userRole={profile.role}
+        collapsed={collapsed}
+        onToggle={() => setCollapsed(!collapsed)}
+        mobileOpen={mobileNavOpen}
+        onMobileClose={() => setMobileNavOpen(false)}
+      />
+      <Navbar
+        profile={profile}
+        sidebarCollapsed={collapsed}
+        onMenuClick={() => setMobileNavOpen(true)}
+      />
 
-        <main
-          className={`
-            pt-16 min-h-screen transition-all duration-300
-            ml-0 ${collapsed ? 'md:ml-[68px]' : 'md:ml-[240px]'}
-          `}
-        >
-          <div className="p-3 sm:p-4 md:p-6">{children}</div>
-        </main>
-      </div>
-    </MonthProvider>
+      <main
+        className={`
+          pt-16 min-h-screen transition-all duration-300
+          ml-0 ${collapsed ? 'md:ml-[68px]' : 'md:ml-[240px]'}
+        `}
+      >
+        <div className="p-3 sm:p-4 md:p-6">{children}</div>
+      </main>
+    </div>
   );
 }

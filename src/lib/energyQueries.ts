@@ -11,22 +11,35 @@ import type {
 export async function getEnergyMeters(): Promise<EnergyMeter[]> {
   const supabase = await createClient();
 
-  const { data, error } = await supabase
-    .from('energy_meters')
-    .select(`
-      *,
-      devices:energy_meter_devices(*)
-    `)
-    .eq('is_active', true)
-    .order('sort_order', { ascending: true })
-    .order('name', { ascending: true });
+  const [{ data, error }, { data: legacyMeters }] = await Promise.all([
+    supabase
+      .from('energy_meters')
+      .select(`
+        *,
+        devices:energy_meter_devices(*)
+      `)
+      .eq('is_active', true)
+      .order('sort_order', { ascending: true })
+      .order('name', { ascending: true }),
+    supabase
+      .from('meters')
+      .select('id, parent_meter_id')
+      .eq('is_active', true),
+  ]);
 
   if (error) {
     console.error('Error fetching energy meters:', error);
     return [];
   }
 
-  return (data || []) as EnergyMeter[];
+  const legacyParentMap = new Map<string, string | null>(
+    (legacyMeters || []).map((lm) => [lm.id, lm.parent_meter_id])
+  );
+
+  return (data || []).map((m: any) => ({
+    ...m,
+    parent_id: m.parent_id || legacyParentMap.get(m.id) || null,
+  })) as EnergyMeter[];
 }
 
 // ─── Get All Energy Meter Devices ───────────────────────────

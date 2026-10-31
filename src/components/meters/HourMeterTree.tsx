@@ -202,6 +202,8 @@ function GroupAccordion({
   logs,
   priorReadings,
   defaultOpen = true,
+  isOpen,
+  onToggleOpen,
   selectedMeterIds,
   onToggleSelect,
   onSelectAllInGroup,
@@ -213,12 +215,16 @@ function GroupAccordion({
   logs: HourReadingLog[];
   priorReadings?: Record<string, HourReadingLog>;
   defaultOpen?: boolean;
+  isOpen?: boolean;
+  onToggleOpen?: () => void;
   selectedMeterIds: Set<string>;
   onToggleSelect: (id: string) => void;
   onSelectAllInGroup: (meters: HourMeter[]) => void;
   onEditMeter: (meter: HourMeter) => void;
 }) {
-  const [open, setOpen] = useState(defaultOpen);
+  const [internalOpen, setInternalOpen] = useState(defaultOpen);
+  const open = isOpen !== undefined ? isOpen : internalOpen;
+  const handleToggle = () => (onToggleOpen ? onToggleOpen() : setInternalOpen(!internalOpen));
   const tierLabels = useTierLabels();
   const meta = GROUP_META[groupKey];
   const count = meters.length;
@@ -246,7 +252,7 @@ function GroupAccordion({
       <div className="w-full flex items-center justify-between px-3.5 sm:px-4 py-2.5 hover:bg-bg-surface-hover transition-colors">
         <button
           type="button"
-          onClick={() => setOpen(!open)}
+          onClick={handleToggle}
           className="flex-1 flex items-center justify-between text-left cursor-pointer min-w-0 mr-3"
         >
           <div className="min-w-0 flex items-center gap-2">
@@ -278,7 +284,7 @@ function GroupAccordion({
 
           <button
             type="button"
-            onClick={() => setOpen(!open)}
+            onClick={handleToggle}
             className="p-1 rounded text-text-muted hover:text-text-primary cursor-pointer"
             aria-label="Toggle accordion"
           >
@@ -629,8 +635,79 @@ export function HourMeterTree({
   const allGroups: HourEquipmentGroup[] = ['Compressor', 'Pump', 'Generator', 'Other'];
   const activeGroups = allGroups.filter((g) => groupedMeters[g].length > 0);
 
+  const [openGroupKeys, setOpenGroupKeys] = useState<Set<string>>(
+    () => new Set(['Compressor', 'Pump', 'Generator', 'Other'])
+  );
+
+  const isAllGroupsOpen = activeGroups.length > 0 && activeGroups.every((g) => openGroupKeys.has(g));
+
+  const toggleAllGroups = () => {
+    if (isAllGroupsOpen) {
+      setOpenGroupKeys(new Set());
+    } else {
+      setOpenGroupKeys(new Set(activeGroups));
+    }
+  };
+
+  const handleToggleGroup = (g: string) => {
+    setOpenGroupKeys((prev) => {
+      const next = new Set(prev);
+      if (next.has(g)) {
+        next.delete(g);
+      } else {
+        next.add(g);
+      }
+      return next;
+    });
+  };
+
   return (
     <div className="space-y-3 pb-24">
+      {/* Quick selection & single Expand/Collapse toggle */}
+      {activeGroups.length > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-2 px-1 text-[11px] text-text-muted">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-2.5">
+            <button
+              type="button"
+              onClick={() => {
+                if (selectedMeterIds.size === meters.length) {
+                  setSelectedMeterIds(new Set());
+                } else {
+                  setSelectedMeterIds(new Set(meters.map((m) => m.id)));
+                }
+              }}
+              className="hover:text-accent font-medium transition-colors cursor-pointer underline-offset-2 hover:underline"
+            >
+              {selectedMeterIds.size === meters.length ? 'Deselect All' : 'Select All Meters'}
+            </button>
+            {selectedMeterIds.size > 0 && (
+              <>
+                <span>·</span>
+                <button
+                  type="button"
+                  onClick={handleClearSelection}
+                  className="hover:text-danger font-medium transition-colors cursor-pointer"
+                >
+                  Clear ({selectedMeterIds.size})
+                </button>
+              </>
+            )}
+
+            {/* Single Expand / Collapse Toggle Button */}
+            <div className="hidden sm:block h-3.5 w-px bg-border/60" />
+            <button
+              type="button"
+              onClick={toggleAllGroups}
+              className="flex items-center gap-1 text-[11px] text-text-muted hover:text-accent font-medium transition-colors cursor-pointer px-2 py-0.5 rounded bg-bg-surface hover:bg-bg-surface-hover border border-border/60"
+              title={isAllGroupsOpen ? 'Collapse all' : 'Expand all'}
+            >
+              <span className="text-[10px]">▼</span>
+              <span>{isAllGroupsOpen ? 'Collapse All' : 'Expand All'}</span>
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Groups (Compressor, Pump, Generator, Other) */}
       {activeGroups.map((groupKey) => (
         <GroupAccordion
@@ -640,7 +717,8 @@ export function HourMeterTree({
           devices={devices}
           logs={logs}
           priorReadings={priorReadings}
-          defaultOpen={true}
+          isOpen={openGroupKeys.has(groupKey)}
+          onToggleOpen={() => handleToggleGroup(groupKey)}
           selectedMeterIds={selectedMeterIds}
           onToggleSelect={handleToggleSelect}
           onSelectAllInGroup={handleSelectAllInGroup}

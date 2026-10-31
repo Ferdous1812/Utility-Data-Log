@@ -57,8 +57,8 @@ export default function LogReadingPage() {
   const [loadingPrevious, setLoadingPrevious] = useState(false);
   const [savingIds, setSavingIds] = useState<Set<string>>(new Set());
   const [submittedIds, setSubmittedIds] = useState<Set<string>>(new Set());
-  const [savingAll, setSavingAll] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [isSavingAll, setIsSavingAll] = useState(false);
 
   // Fetch current user's role (edit access is admin-only, same as History page)
   useEffect(() => {
@@ -420,105 +420,6 @@ export default function LogReadingPage() {
     });
   };
 
-  // Save All: batch-save every row that has an unsaved, non-empty current value
-  const handleSaveAll = async () => {
-    // Collect rows that qualify: have a non-empty value AND are not already submitted
-    const unsavedRows = rows.filter(
-      (r) => r.currentValue.trim() !== '' && !submittedIds.has(r.meter.id)
-    );
-
-    if (unsavedRows.length === 0) {
-      addToast('info', 'No unsaved readings to save.');
-      return;
-    }
-
-    // Validate all qualifying rows first
-    for (const row of unsavedRows) {
-      const val = parseFloat(row.currentValue);
-      if (isNaN(val) || val < 0) {
-        addToast(
-          'error',
-          `Invalid reading for "${row.meter.name}". Must be a non-negative number. Fix it before using Save All.`
-        );
-        return;
-      }
-    }
-
-    setSavingAll(true);
-    // Mark all qualifying meters as saving
-    setSavingIds((prev) => {
-      const next = new Set(prev);
-      unsavedRows.forEach((r) => next.add(r.meter.id));
-      return next;
-    });
-
-    let successCount = 0;
-    let failCount = 0;
-
-    for (const row of unsavedRows) {
-      const val = parseFloat(row.currentValue);
-      const isBranch = !!(row.meter as any)._branch;
-
-      const result = isBranch
-        ? row.readingId
-          ? await updateBranchReading(row.readingId, {
-              reading_value: val,
-              reading_date: currentReadingDate,
-              is_reset: row.isReset,
-            })
-          : await logBranchReading({
-              device_id: row.meter.id,
-              reading_value: val,
-              reading_date: currentReadingDate,
-              is_reset: row.isReset,
-            })
-        : row.readingId
-        ? await updateReadingAction(row.readingId, {
-            reading_value: val,
-            reading_date: currentReadingDate,
-            is_reset: row.isReset,
-          })
-        : await logReading({
-            meter_id: row.meter.id,
-            reading_value: val,
-            reading_date: currentReadingDate,
-            is_reset: row.isReset,
-          });
-
-      if (result.success) {
-        const newReadingId = (result as { readingId?: string }).readingId;
-        setRows((prev) =>
-          prev.map((r) =>
-            r.meter.id === row.meter.id
-              ? { ...r, readingId: newReadingId ?? r.readingId }
-              : r
-          )
-        );
-        setSubmittedIds((prev) => new Set(prev).add(row.meter.id));
-        successCount++;
-      } else {
-        addToast('error', `${row.meter.name}: ${result.message}`);
-        failCount++;
-      }
-
-      // Remove this meter from saving set
-      setSavingIds((prev) => {
-        const next = new Set(prev);
-        next.delete(row.meter.id);
-        return next;
-      });
-    }
-
-    setSavingAll(false);
-
-    if (successCount > 0) {
-      addToast(
-        'success',
-        `Saved ${successCount} reading${successCount > 1 ? 's' : ''} successfully${failCount > 0 ? ` (${failCount} failed)` : ''}.`
-      );
-    }
-  };
-
   // Unlock a saved row for editing again
   const handleEditRow = (meterId: string) => {
     setSubmittedIds((prev) => {
@@ -526,6 +427,127 @@ export default function LogReadingPage() {
       next.delete(meterId);
       return next;
     });
+  };
+
+  // Count of unsaved rows that currently have a valid non-zero reading value
+  const unsavedNonZeroCount = useMemo(() => {
+    return rows.filter((r) => {
+      if (submittedIds.has(r.meter.id)) return false;
+      if (!r.currentValue.trim()) return false;
+      const val = parseFloat(r.currentValue);
+      return !isNaN(val) && val > 0;
+    }).length;
+  }, [rows, submittedIds]);
+
+  // Master Save All: Saves all unsaved rows with non-zero values at once
+  const handleSaveAll = async () => {
+    const unsavedRows = rows.filter((r) => {
+      if (submittedIds.has(r.meter.id)) return false;
+      if (!r.currentValue.trim()) return false;
+      const val = parseFloat(r.currentValue);
+      return !isNaN(val) && val > 0;
+    });
+
+    if (unsavedRows.length === 0) {
+      addToast('info', 'No unsaved readings with non-zero values to save.');
+      return;
+    }
+
+    setIsSavingAll(true);
+    setSavingIds((prev) => new Set([...prev, ...unsavedRows.map((r) => r.meter.id)]));
+
+    const savePromises = unsavedRows.map(async (row) => {
+      const val = parseFloat(row.currentValue);
+      const isBranch = !!(row.meter as any)._branch;
+      try {
+        const result = isBranch
+          ? row.readingId
+            ? await updateBranchReading(row.readingId, {
+                reading_value: val,
+                reading_date: currentReadingDate,
+                is_reset: row.isReset,
+              })
+            : await logBranchReading({
+                device_id: row.meter.id,
+                reading_value: val,
+                reading_date: currentReadingDate,
+                is_reset: row.isReset,
+              })
+          : row.readingId
+          ? await updateReadingAction(row.readingId, {
+              reading_value: val,
+              reading_date: currentReadingDate,
+              is_reset: row.isReset,
+            })
+          : await logReading({
+              meter_id: row.meter.id,
+              reading_value: val,
+              reading_date: currentReadingDate,
+              is_reset: row.isReset,
+            });
+
+        return {
+          meterId: row.meter.id,
+          meterName: row.meter.name,
+          success: result.success,
+          readingId: (result as { readingId?: string }).readingId,
+          message: result.message,
+        };
+      } catch (err: any) {
+        return {
+          meterId: row.meter.id,
+          meterName: row.meter.name,
+          success: false,
+          readingId: undefined,
+          message: err?.message || 'Failed to save',
+        };
+      }
+    });
+
+    const results = await Promise.all(savePromises);
+    const successful = results.filter((r) => r.success);
+    const failed = results.filter((r) => !r.success);
+
+    if (successful.length > 0) {
+      const successfulMap = new Map(successful.map((s) => [s.meterId, s.readingId]));
+      setRows((prev) =>
+        prev.map((r) => {
+          if (successfulMap.has(r.meter.id)) {
+            const newId = successfulMap.get(r.meter.id);
+            return {
+              ...r,
+              readingId: newId ?? r.readingId,
+            };
+          }
+          return r;
+        })
+      );
+
+      setSubmittedIds((prev) => {
+        const next = new Set(prev);
+        successful.forEach((s) => next.add(s.meterId));
+        return next;
+      });
+
+      addToast(
+        'success',
+        `Successfully saved ${successful.length} reading${successful.length > 1 ? 's' : ''}!`
+      );
+    }
+
+    if (failed.length > 0) {
+      addToast(
+        'error',
+        `Failed to save ${failed.length} reading${failed.length > 1 ? 's' : ''}: ${failed.map((f) => f.meterName).join(', ')}`
+      );
+    }
+
+    setSavingIds((prev) => {
+      const next = new Set(prev);
+      unsavedRows.forEach((r) => next.delete(r.meter.id));
+      return next;
+    });
+    setIsSavingAll(false);
   };
 
   const sectionTabs = useMemo(() => {
@@ -586,7 +608,7 @@ export default function LogReadingPage() {
     (r) => r.meter.type === 'outgoing_sub_sub'
   );
 
-  // --- Export Excel (XLSX) ---
+  // --- Export to Excel (XLSX) ---
   const handleExportToExcel = useCallback(async () => {
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet('Log Readings');
@@ -754,7 +776,7 @@ export default function LogReadingPage() {
   }, [rows, sections, currentReadingDate, incomingRows, outgoingMainRows, outgoingSubRows, outgoingSubSubRows, addToast]);
 
   return (
-    <div className="max-w-7xl mx-auto space-y-3.5">
+    <div className="max-w-7xl mx-auto space-y-3.5 animate-fade-in">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
@@ -768,25 +790,20 @@ export default function LogReadingPage() {
             variant="primary"
             size="sm"
             onClick={handleSaveAll}
-            disabled={savingAll || rows.length === 0 || rows.every((r) => r.currentValue.trim() === '' || submittedIds.has(r.meter.id))}
-            className="text-xs"
+            disabled={isSavingAll || unsavedNonZeroCount === 0}
+            loading={isSavingAll}
+            className="text-xs shadow-xs"
             icon={
-              savingAll ? (
-                <svg className="animate-spin" width="14" height="14" viewBox="0 0 24 24" fill="none">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                </svg>
-              ) : (
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
-                  <polyline points="17 21 17 13 7 13 7 21" />
-                  <polyline points="7 3 7 8 15 8" />
-                </svg>
-              )
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
+                <polyline points="17 21 17 13 7 13 7 21" />
+                <polyline points="7 3 7 8 15 8" />
+              </svg>
             }
           >
-            {savingAll ? 'Saving...' : 'Save All'}
+            Save All{unsavedNonZeroCount > 0 ? ` (${unsavedNonZeroCount})` : ''}
           </Button>
+
           <Button
             variant="outline"
             size="sm"

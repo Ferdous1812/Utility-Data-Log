@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { ToastProvider } from "@/components/ui/Toast";
+import { MonthProvider } from "@/context/MonthContext";
 import { themeInitScript } from "@/components/ThemeToggle";
 
 export const metadata: Metadata = {
@@ -25,7 +26,9 @@ export default function RootLayout({
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
       </head>
       <body className="antialiased">
-        <ToastProvider>{children}</ToastProvider>
+        <ToastProvider>
+          <MonthProvider>{children}</MonthProvider>
+        </ToastProvider>
       </body>
     </html>
   );

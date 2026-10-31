@@ -204,7 +204,7 @@ export function HistoryTable({
   }, [sectionGroups, activeTabId]);
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-3.5">
       {tabs.length > 1 && (
         <Tabs
           tabs={tabs}

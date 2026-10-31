@@ -114,13 +114,19 @@ const navItems: NavItem[] = [
 
 export function Sidebar({ userRole, collapsed, onToggle, mobileOpen = false, onMobileClose }: SidebarProps) {
   const pathname = usePathname();
-  const { selectedMonth } = useSyncedMonth();
+  const { selectedMonth, hasAppliedFilter } = useSyncedMonth();
+
+  const getHref = (baseHref: string) => {
+    const monthPages = ['/dashboard', '/energy-meters', '/hour-meters', '/gas-meters', '/consumption'];
+    if (hasAppliedFilter && selectedMonth && monthPages.includes(baseHref)) {
+      return `${baseHref}?month=${selectedMonth}`;
+    }
+    return baseHref;
+  };
 
   const filteredItems = navItems.filter(
     (item) => !item.adminOnly || userRole === 'admin'
   );
-
-  const syncedRoutes = ['/dashboard', '/energy-meters', '/hour-meters', '/gas-meters'];
 
   return (
     <>
@@ -171,13 +177,10 @@ export function Sidebar({ userRole, collapsed, onToggle, mobileOpen = false, onM
         <nav className="flex-1 py-3 px-2 flex flex-col gap-1 overflow-y-auto">
           {filteredItems.map((item) => {
             const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
-            const targetHref = syncedRoutes.includes(item.href) && selectedMonth
-              ? `${item.href}?month=${selectedMonth}`
-              : item.href;
             return (
               <Link
                 key={item.href}
-                href={targetHref}
+                href={getHref(item.href)}
                 onClick={onMobileClose}
                 title={collapsed ? item.label : undefined}
                 className={`

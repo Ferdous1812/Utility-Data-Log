@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/client';
 import { Card } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { format, subMonths, endOfMonth, subDays } from 'date-fns';
+import { useSyncedMonth } from '@/context/MonthContext';
 import type { Meter, Reading, MeterSection } from '@/lib/types';
 
 interface ConsumptionRow {
@@ -22,11 +23,38 @@ type DateMode = 'month' | 'custom';
 
 export default function ConsumptionPage() {
   const supabase = createClient();
+  const {
+    year: syncedYear,
+    month: syncedMonthNum,
+    setYearAndMonth,
+    hasAppliedFilter,
+  } = useSyncedMonth();
 
   const now = new Date();
   const [dateMode, setDateMode] = useState<DateMode>('month');
-  const [selectedMonth, setSelectedMonth] = useState(now.getMonth() + 1);
-  const [selectedYear, setSelectedYear] = useState(now.getFullYear());
+  const [selectedMonth, setSelectedMonth] = useState(() => (hasAppliedFilter && syncedMonthNum ? syncedMonthNum : now.getMonth() + 1));
+  const [selectedYear, setSelectedYear] = useState(() => (hasAppliedFilter && syncedYear ? syncedYear : now.getFullYear()));
+
+  // Keep in sync with universal month filter if applied
+  useEffect(() => {
+    if (hasAppliedFilter && syncedMonthNum && syncedYear) {
+      if (syncedMonthNum !== selectedMonth || syncedYear !== selectedYear) {
+        setSelectedMonth(syncedMonthNum);
+        setSelectedYear(syncedYear);
+      }
+    }
+  }, [hasAppliedFilter, syncedMonthNum, syncedYear, selectedMonth, selectedYear]);
+
+  // Clean ?month= from the URL bar so that refreshing resets to defaults
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const url = new URL(window.location.href);
+      if (url.searchParams.has('month')) {
+        url.searchParams.delete('month');
+        window.history.replaceState(null, '', url.pathname + (url.search || ''));
+      }
+    }
+  }, []);
 
   // Custom date range
   const [customStartDate, setCustomStartDate] = useState(
@@ -442,7 +470,11 @@ export default function ConsumptionPage() {
               </label>
               <select
                 value={selectedMonth}
-                onChange={(e) => setSelectedMonth(Number(e.target.value))}
+                onChange={(e) => {
+                  const m = Number(e.target.value);
+                  setSelectedMonth(m);
+                  setYearAndMonth(selectedYear, m);
+                }}
                 className="w-full bg-bg-surface border border-border rounded-[var(--radius-md)] text-text-primary py-2.5 px-4 text-sm focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/30 cursor-pointer"
               >
                 {monthNames.map((name, idx) => (
@@ -461,7 +493,11 @@ export default function ConsumptionPage() {
               </label>
               <select
                 value={selectedYear}
-                onChange={(e) => setSelectedYear(Number(e.target.value))}
+                onChange={(e) => {
+                  const y = Number(e.target.value);
+                  setSelectedYear(y);
+                  setYearAndMonth(y, selectedMonth);
+                }}
                 className="w-full bg-bg-surface border border-border rounded-[var(--radius-md)] text-text-primary py-2.5 px-4 text-sm focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/30 cursor-pointer"
               >
                 {yearOptions.map((y) => (

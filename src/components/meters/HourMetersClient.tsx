@@ -1,8 +1,9 @@
 'use client';
 
-import React, { useState, useTransition, useMemo, useEffect } from 'react';
+import React, { useState, useEffect, useTransition, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { format } from 'date-fns';
+import { useSyncedMonth } from '@/context/MonthContext';
 import type { HourMeter, HourMeterDevice, HourReadingLog } from '@/types/hour';
 import type { AvailableMeterForHour } from '@/lib/hourQueries';
 import { toggleMeterInHourAction } from '@/lib/hourActions';
@@ -13,7 +14,6 @@ import { StatCard } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { ToastProvider } from '@/components/ui/Toast';
 import { useTierLabels } from '@/lib/useTierLabels';
-import { useSyncedMonth } from '@/context/MonthContext';
 
 function HourMetersContent({
   meters,
@@ -34,20 +34,27 @@ function HourMetersContent({
   const [isPending, startTransition] = useTransition();
   const [manageModalOpen, setManageModalOpen] = useState(false);
   const tierLabels = useTierLabels();
-  const { selectedMonth: syncedMonth, setSelectedMonth } = useSyncedMonth();
+  const { selectedMonth: contextMonth, setSelectedMonth, hasAppliedFilter } = useSyncedMonth();
 
+  // If a universal month filter has been applied in context and this page rendered with a different month, sync it
+  useEffect(() => {
+    if (hasAppliedFilter && contextMonth && selectedMonth !== contextMonth) {
+      startTransition(() => {
+        router.replace(`/hour-meters?month=${contextMonth}`);
+      });
+    }
+  }, [hasAppliedFilter, contextMonth, selectedMonth, router]);
+
+  // Clean ?month= from the URL bar so that refreshing or reopening starts with defaults
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      const searchHasMonth = window.location.search.includes('month=');
-      if (searchHasMonth && selectedMonth && selectedMonth !== syncedMonth) {
-        setSelectedMonth(selectedMonth);
-      } else if (!searchHasMonth && syncedMonth && syncedMonth !== selectedMonth) {
-        startTransition(() => {
-          router.replace(`/hour-meters?month=${syncedMonth}`);
-        });
+      const url = new URL(window.location.href);
+      if (url.searchParams.has('month')) {
+        url.searchParams.delete('month');
+        window.history.replaceState(null, '', url.pathname + (url.search || ''));
       }
     }
-  }, [selectedMonth, syncedMonth, setSelectedMonth, router]);
+  }, [selectedMonth]);
 
   // Month navigation logic
   const [y, m] = selectedMonth.split('-');

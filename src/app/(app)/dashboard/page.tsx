@@ -74,58 +74,51 @@ export default function DashboardPage() {
     year: syncedYear,
     month: syncedMonthNum,
     setYearAndMonth,
+    hasAppliedFilter,
   } = useSyncedMonth();
 
-  const [refMonth, setRefMonth] = useState(() => syncedMonthNum || defaultRef.getMonth() + 1);
-  const [refYear, setRefYear] = useState(() => syncedYear || defaultRef.getFullYear());
+  const [refMonth, setRefMonth] = useState(() => (hasAppliedFilter && syncedMonthNum ? syncedMonthNum : defaultRef.getMonth() + 1));
+  const [refYear, setRefYear] = useState(() => (hasAppliedFilter && syncedYear ? syncedYear : defaultRef.getFullYear()));
   const [comparisonRange, setComparisonRange] = useState<ComparisonRange>(1);
 
-  // If dashboard is opened with ?month= in URL, sync it
+  // If dashboard is opened with ?month= in URL, sync it and clean the URL so refresh resets to default
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      const params = new URLSearchParams(window.location.search);
-      const m = params.get('month');
-      if (m && m.includes('-')) {
-        const [y, mon] = m.split('-').map(Number);
-        if (y && mon && !isNaN(y) && !isNaN(mon)) {
-          setRefMonth(mon);
-          setRefYear(y);
-          setSelectedMonth(m);
+      const url = new URL(window.location.href);
+      if (url.searchParams.has('month')) {
+        const m = url.searchParams.get('month');
+        if (m && m.includes('-')) {
+          const [y, mon] = m.split('-').map(Number);
+          if (y && mon && !isNaN(y) && !isNaN(mon)) {
+            setRefMonth(mon);
+            setRefYear(y);
+            setSelectedMonth(m);
+          }
         }
+        url.searchParams.delete('month');
+        window.history.replaceState(null, '', url.pathname + (url.search || ''));
       }
     }
   }, [setSelectedMonth]);
 
   // Keep local state in sync when syncedMonth changes from outside (e.g. other pages)
   useEffect(() => {
-    if (syncedMonthNum && syncedYear) {
+    if (hasAppliedFilter && syncedMonthNum && syncedYear) {
       if (syncedMonthNum !== refMonth || syncedYear !== refYear) {
         setRefMonth(syncedMonthNum);
         setRefYear(syncedYear);
       }
     }
-  }, [syncedMonthNum, syncedYear]);
+  }, [hasAppliedFilter, syncedMonthNum, syncedYear, refMonth, refYear]);
 
   const handleRefMonthChange = useCallback((newMonth: number) => {
     setRefMonth(newMonth);
     setYearAndMonth(refYear, newMonth);
-    const mStr = `${refYear}-${String(newMonth).padStart(2, '0')}`;
-    if (typeof window !== 'undefined') {
-      const url = new URL(window.location.href);
-      url.searchParams.set('month', mStr);
-      window.history.replaceState(null, '', url.pathname + url.search);
-    }
   }, [refYear, setYearAndMonth]);
 
   const handleRefYearChange = useCallback((newYear: number) => {
     setRefYear(newYear);
     setYearAndMonth(newYear, refMonth);
-    const mStr = `${newYear}-${String(refMonth).padStart(2, '0')}`;
-    if (typeof window !== 'undefined') {
-      const url = new URL(window.location.href);
-      url.searchParams.set('month', mStr);
-      window.history.replaceState(null, '', url.pathname + url.search);
-    }
   }, [refMonth, setYearAndMonth]);
 
   const [meters, setMeters] = useState<Meter[]>([]);

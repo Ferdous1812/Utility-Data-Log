@@ -204,6 +204,8 @@ function SectionAccordion({
   logs,
   priorReadings,
   defaultOpen = false,
+  isOpen,
+  onToggleOpen,
   selectedMeterIds,
   onToggleSelect,
   onSelectAllInSection,
@@ -216,13 +218,17 @@ function SectionAccordion({
   logs: EnergyReadingLog[];
   priorReadings?: Record<string, EnergyReadingLog>;
   defaultOpen?: boolean;
+  isOpen?: boolean;
+  onToggleOpen?: () => void;
   selectedMeterIds: Set<string>;
   onToggleSelect: (id: string) => void;
   onSelectAllInSection: (meters: EnergyMeter[]) => void;
   onEditMeter: (meter: EnergyMeter) => void;
   config: MeterPageConfig;
 }) {
-  const [open, setOpen] = useState(defaultOpen);
+  const [internalOpen, setInternalOpen] = useState(defaultOpen);
+  const open = isOpen !== undefined ? isOpen : internalOpen;
+  const handleToggle = () => (onToggleOpen ? onToggleOpen() : setInternalOpen(!internalOpen));
   const isGas = config.unitSymbol === 'm³';
   const meta = (isGas && GAS_SECTION_META[section]) ? GAS_SECTION_META[section] : ENERGY_SECTION_META[section];
   const count = meters.length;
@@ -238,7 +244,7 @@ function SectionAccordion({
       <div className="w-full flex items-center justify-between px-3.5 sm:px-4 py-2.5 hover:bg-bg-surface-hover transition-colors">
         <button
           type="button"
-          onClick={() => setOpen(!open)}
+          onClick={handleToggle}
           className="flex-1 flex items-center justify-between text-left cursor-pointer min-w-0 mr-3"
         >
           <div className="min-w-0 flex items-center gap-2">
@@ -264,7 +270,7 @@ function SectionAccordion({
 
           <button
             type="button"
-            onClick={() => setOpen(!open)}
+            onClick={handleToggle}
             className="p-1 rounded text-text-muted hover:text-text-primary cursor-pointer"
             aria-label="Toggle accordion"
           >
@@ -679,13 +685,39 @@ export function GenericMeterTree({
   ];
   const activeSections = sectionOrder.filter((section) => (grouped[section] || []).length > 0);
 
+  const [openSectionIds, setOpenSectionIds] = useState<Set<string>>(
+    () => new Set(['incoming', 'outgoing_main', 'outgoing_sub', 'outgoing_sub_sub'])
+  );
+
+  const isAllSectionsOpen = activeSections.length > 0 && activeSections.every((s) => openSectionIds.has(s));
+
+  const toggleAllSections = () => {
+    if (isAllSectionsOpen) {
+      setOpenSectionIds(new Set());
+    } else {
+      setOpenSectionIds(new Set(activeSections));
+    }
+  };
+
+  const handleToggleSection = (section: string) => {
+    setOpenSectionIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(section)) {
+        next.delete(section);
+      } else {
+        next.add(section);
+      }
+      return next;
+    });
+  };
+
   const selectedCount = selectedMeterIds.size;
 
   return (
     <div className={`flex flex-col gap-2.5 ${selectedCount > 0 ? 'pb-24' : ''}`}>
       {/* Legend & quick selection action */}
-      <div className="flex items-center justify-between px-1 text-[11px] text-text-muted">
-        <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-2 px-1 text-[11px] text-text-muted">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-2.5">
           <button
             type="button"
             onClick={handleSelectAll}
@@ -705,6 +737,18 @@ export function GenericMeterTree({
               </button>
             </>
           )}
+
+          {/* Single Expand / Collapse Toggle Button */}
+          <div className="hidden sm:block h-3.5 w-px bg-border/60" />
+          <button
+            type="button"
+            onClick={toggleAllSections}
+            className="flex items-center gap-1 text-[11px] text-text-muted hover:text-accent font-medium transition-colors cursor-pointer px-2 py-0.5 rounded bg-bg-surface hover:bg-bg-surface-hover border border-border/60"
+            title={isAllSectionsOpen ? 'Collapse all' : 'Expand all'}
+          >
+            <span className="text-[10px]">▼</span>
+            <span>{isAllSectionsOpen ? 'Collapse All' : 'Expand All'}</span>
+          </button>
         </div>
 
         <div className="flex items-center gap-3">
@@ -738,7 +782,8 @@ export function GenericMeterTree({
             devices={devices}
             logs={logs}
             priorReadings={priorReadings}
-            defaultOpen={true}
+            isOpen={openSectionIds.has(section)}
+            onToggleOpen={() => handleToggleSection(section)}
             selectedMeterIds={selectedMeterIds}
             onToggleSelect={handleToggleSelect}
             onSelectAllInSection={handleSelectAllInSection}
