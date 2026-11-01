@@ -1,13 +1,12 @@
 'use client';
 
-import React, { useState, useEffect, useTransition } from 'react';
+import React, { useState, useEffect, useTransition, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { format } from 'date-fns';
 import { useSyncedMonth } from '@/context/MonthContext';
 import type { EnergyMeter, EnergyMeterDevice, EnergyReadingLog } from '@/types/energy';
 import type { AvailableMeterForUnit } from '@/lib/meterQueries';
-import { computeEnergyDashboardStats } from '@/lib/calculations/energy';
-import { GenericMeterTree, type MeterPageConfig } from '@/components/meters/GenericMeterTree';
+import { GenericMeterTree, getMeterReadingData, type MeterPageConfig } from '@/components/meters/GenericMeterTree';
 import { ManageEnergyMetersModal } from '@/components/energy/ManageEnergyMetersModal';
 import { StatCard } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -59,7 +58,42 @@ function GenericMetersContent({
     }
   }, [selectedMonth]);
 
-  const stats = computeEnergyDashboardStats(meters, devices, logs);
+  // Compute gas consumption stats using actual reading data (with priorReadings support)
+  const stats = useMemo(() => {
+    let totalIncoming = 0;
+    let totalOutgoingMain = 0;
+    let totalOutgoingSub = 0;
+
+    const incomingMeters = meters.filter(
+      (m) =>
+        (m.section === 'incoming' || m.section === 'main' || m.type === 'incoming' || m.type === 'main') &&
+        m.is_active !== false
+    );
+    const hasPrimaryIncoming = incomingMeters.some((m) => m.is_primary_for_total === true);
+
+    meters.forEach((meter) => {
+      if (meter.is_active === false) return;
+      const data = getMeterReadingData(meter, devices, logs, priorReadings);
+      const consumption = data.consumption || 0;
+
+      const sec = meter.section || meter.type;
+      if (sec === 'incoming' || sec === 'main') {
+        if (!hasPrimaryIncoming || meter.is_primary_for_total) {
+          totalIncoming += consumption;
+        }
+      } else if (sec === 'outgoing_main' || sec === 'outgoing') {
+        totalOutgoingMain += consumption;
+      } else if (sec === 'outgoing_sub' || sec === 'outgoing_sub_sub' || sec === 'submeter') {
+        totalOutgoingSub += consumption;
+      }
+    });
+
+    return {
+      totalIncoming,
+      totalOutgoingMain,
+      totalOutgoingSub,
+    };
+  }, [meters, devices, logs, priorReadings]);
 
   // Month navigation logic
   const [y, m] = selectedMonth.split('-');
@@ -160,7 +194,7 @@ function GenericMetersContent({
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 stagger-children">
         <StatCard
           label="Total RMS Incomer"
-          value={`${stats.totalIncoming.toLocaleString(undefined, { maximumFractionDigits: 0 })} ${config.unitSymbol}`}
+          value={`${stats.totalIncoming.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${config.unitSymbol}`}
           accentColor="var(--color-warning)"
           icon={
             config.unitSymbol === 'hrs' ? (
@@ -177,7 +211,7 @@ function GenericMetersContent({
         />
         <StatCard
           label="Total Consumption In Headers"
-          value={`${stats.totalOutgoingMain.toLocaleString(undefined, { maximumFractionDigits: 0 })} ${config.unitSymbol}`}
+          value={`${stats.totalOutgoingMain.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${config.unitSymbol}`}
           accentColor="var(--color-accent)"
           icon={
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -189,7 +223,7 @@ function GenericMetersContent({
         />
         <StatCard
           label="Total Consumption In Appliances"
-          value={`${stats.totalOutgoingSub.toLocaleString(undefined, { maximumFractionDigits: 0 })} ${config.unitSymbol}`}
+          value={`${stats.totalOutgoingSub.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${config.unitSymbol}`}
           accentColor="var(--color-success)"
           icon={
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

@@ -1,13 +1,12 @@
 'use client';
 
-import React, { useState, useEffect, useTransition } from 'react';
+import React, { useState, useEffect, useTransition, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { format } from 'date-fns';
 import { useSyncedMonth } from '@/context/MonthContext';
 import type { EnergyMeter, EnergyMeterDevice, EnergyReadingLog } from '@/types/energy';
 import type { AvailableMeter } from '@/lib/energyQueries';
-import { computeEnergyDashboardStats } from '@/lib/calculations/energy';
-import { EnergyMeterTree } from '@/components/energy/EnergyMeterTree';
+import { EnergyMeterTree, getMeterReadingData } from '@/components/energy/EnergyMeterTree';
 import { ManageEnergyMetersModal } from '@/components/energy/ManageEnergyMetersModal';
 import { StatCard } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -53,7 +52,52 @@ function EnergyMetersContent({
     }
   }, [selectedMonth]);
 
-  const stats = computeEnergyDashboardStats(meters, devices, logs);
+  // Compute energy stats using getMeterReadingData (accounting for split branches, priorReadings, etc.)
+  const stats = useMemo(() => {
+    let totalIncoming = 0;
+    let totalOutgoingMain = 0;
+    let totalOutgoingSub = 0;
+    let totalOutgoingSubSub = 0;
+
+    const incomingMeters = meters.filter(
+      (m) => m.section === 'incoming' && m.is_active !== false
+    );
+    const hasPrimaryIncoming = incomingMeters.some((m) => m.is_primary_for_total === true);
+
+    meters.forEach((meter) => {
+      if (meter.is_active === false) return;
+      const data = getMeterReadingData(meter, devices, logs, priorReadings);
+      const consumption = data.consumption || 0;
+
+      if (meter.section === 'incoming') {
+        if (!hasPrimaryIncoming || meter.is_primary_for_total) {
+          totalIncoming += consumption;
+        }
+      } else if (meter.section === 'outgoing_main') {
+        totalOutgoingMain += consumption;
+      } else if (meter.section === 'outgoing_sub') {
+        totalOutgoingSub += consumption;
+      } else if (meter.section === 'outgoing_sub_sub') {
+        totalOutgoingSubSub += consumption;
+      }
+    });
+
+    const systemLoss = totalIncoming - totalOutgoingMain;
+    const systemLossPercent = totalIncoming > 0 ? (systemLoss / totalIncoming) * 100 : 0;
+
+    const activeMetersCount = meters.filter((m) => m.is_active !== false).length;
+
+    return {
+      totalIncoming,
+      totalOutgoingMain,
+      totalOutgoingSub,
+      totalOutgoingSubSub,
+      systemLoss,
+      systemLossPercent,
+      totalMeters: activeMetersCount,
+      activeCount: activeMetersCount,
+    };
+  }, [meters, devices, logs, priorReadings]);
 
   // Month navigation logic
   const [y, m] = selectedMonth.split('-');

@@ -8,6 +8,7 @@ import { Tabs } from '@/components/ui/Tabs';
 import type { MonthlyComparisonRow } from '@/components/charts/MonthlyComparisonChart';
 import { FilterableChartCard } from '@/components/charts/FilterableMonthlyChart';
 import { computeEnergyDashboardStats } from '@/lib/calculations/energy';
+import { getMeterReadingData } from '@/components/meters/GenericMeterTree';
 import type { EnergyMeter, EnergyMeterDevice, EnergyReadingLog } from '@/types/energy';
 import { colorAt } from '@/lib/chartColors';
 import { format, subMonths, endOfMonth, startOfMonth, subDays, addDays } from 'date-fns';
@@ -138,6 +139,7 @@ export default function DashboardPage() {
     devices: EnergyMeterDevice[];
     logs: EnergyReadingLog[];
   }>({ meters: [], devices: [], logs: [] });
+  const [gasPriorReadings, setGasPriorReadings] = useState<Record<string, EnergyReadingLog>>({});
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'energy' | 'gas' | 'hour'>('energy');
 
@@ -288,6 +290,68 @@ export default function DashboardPage() {
     });
     setGasMeterIds(new Set(gasMetersList.map((g) => g.id)));
 
+    // Fetch prior readings for gas meters (readings up to priorCutoff)
+    const priorCutoff = format(subDays(refMonthStart, 1), 'yyyy-MM-dd');
+    const { data: priorGasLogs } = await supabase
+      .from('gas_reading_logs')
+      .select('*, device:gas_meter_devices(id, meter_id)')
+      .lte('reading_date', priorCutoff)
+      .order('reading_date', { ascending: false })
+      .order('created_at', { ascending: false })
+      .limit(1000);
+
+    const priorMap: Record<string, EnergyReadingLog> = {};
+    (priorGasLogs || []).forEach((log: any) => {
+      const devId = log.device_id;
+      if (devId && !priorMap[devId]) {
+        priorMap[devId] = log as EnergyReadingLog;
+      }
+      const meterId = log.device?.meter_id;
+      if (meterId && !priorMap[meterId]) {
+        priorMap[meterId] = log as EnergyReadingLog;
+      }
+    });
+
+    const missingPriorMeterIds = gasMetersList
+      .filter((m) => {
+        const primaryDev = m.devices?.find((d) => d.is_billing_primary) || m.devices?.[0];
+        const devId = primaryDev?.id || m.id;
+        return !priorMap[devId] && !priorMap[m.id];
+      })
+      .map((m) => m.id);
+
+    if (missingPriorMeterIds.length > 0) {
+      const { data: legacyPrior } = await supabase
+        .from('readings')
+        .select('id, meter_id, reading_value, reading_date, usage, created_at, logged_by')
+        .in('meter_id', missingPriorMeterIds)
+        .lte('reading_date', priorCutoff)
+        .order('reading_date', { ascending: false })
+        .order('created_at', { ascending: false });
+
+      const gmMap = new Map(gasMetersList.map((m) => [m.id, m]));
+      (legacyPrior || []).forEach((lr: any) => {
+        const gm = gmMap.get(lr.meter_id);
+        const primaryDev = gm?.devices?.find((d) => d.is_billing_primary) || gm?.devices?.[0];
+        const devId = primaryDev?.id || lr.meter_id;
+        if (!priorMap[devId]) {
+          const item = {
+            id: lr.id,
+            device_id: devId,
+            reading_value: Number(lr.reading_value),
+            reading_date: lr.reading_date,
+            usage: lr.usage != null ? Number(lr.usage) : null,
+            operator_id: lr.logged_by,
+            created_at: lr.created_at,
+          } as EnergyReadingLog;
+          priorMap[devId] = item;
+          priorMap[lr.meter_id] = item;
+        }
+      });
+    }
+
+    setGasPriorReadings(priorMap);
+
     const hourMap = new Map<string, { equipment_group?: string; category?: string }>();
     (hourMetersRes.data || []).forEach((hm: any) => {
       hourMap.set(hm.id, { equipment_group: hm.equipment_group, category: hm.category });
@@ -334,6 +398,31 @@ export default function DashboardPage() {
         created_at: r.created_at,
       });
       grouped.set(r.meter_id, arr);
+    });
+
+    // Also merge any logs from gas_reading_logs into grouped for multi-month charts
+    const { data: gasChartLogs } = await supabase
+      .from('gas_reading_logs')
+      .select('id, reading_value, reading_date, created_at, device:gas_meter_devices(id, meter_id)')
+      .gte('reading_date', windowStart)
+      .lte('reading_date', windowEnd)
+      .order('reading_date', { ascending: true })
+      .order('created_at', { ascending: true });
+
+    (gasChartLogs || []).forEach((gr: any) => {
+      const mId = gr.device?.meter_id;
+      if (!mId) return;
+      const arr = grouped.get(mId) || [];
+      if (!arr.some((existing) => existing.reading_date === gr.reading_date && existing.reading_value === Number(gr.reading_value))) {
+        arr.push({
+          id: gr.id,
+          reading_value: Number(gr.reading_value),
+          reading_date: gr.reading_date,
+          created_at: gr.created_at,
+        });
+        arr.sort((a, b) => a.reading_date.localeCompare(b.reading_date) || (a.created_at || '').localeCompare(b.created_at || ''));
+        grouped.set(mId, arr);
+      }
     });
 
     // Branch readings for split energy meters (Peak / Off-Peak)
@@ -601,10 +690,38 @@ export default function DashboardPage() {
   );
 
   // Gas cards: identical calculation to the Gas Meters page
-  const gasStats = useMemo(
-    () => computeEnergyDashboardStats(gasStatsData.meters, gasStatsData.devices, gasStatsData.logs),
-    [gasStatsData]
-  );
+  const gasStats = useMemo(() => {
+    let totalIncoming = 0;
+    let totalOutgoingMain = 0;
+    let totalOutgoingSub = 0;
+
+    const incomingMeters = gasStatsData.meters.filter(
+      (m) => m.section === 'incoming' && m.is_active !== false
+    );
+    const hasPrimaryIncoming = incomingMeters.some((m) => m.is_primary_for_total === true);
+
+    gasStatsData.meters.forEach((meter) => {
+      if (meter.is_active === false) return;
+      const data = getMeterReadingData(meter, gasStatsData.devices, gasStatsData.logs, gasPriorReadings);
+      const consumption = data.consumption || 0;
+
+      if (meter.section === 'incoming') {
+        if (!hasPrimaryIncoming || meter.is_primary_for_total) {
+          totalIncoming += consumption;
+        }
+      } else if (meter.section === 'outgoing_main') {
+        totalOutgoingMain += consumption;
+      } else if (meter.section === 'outgoing_sub' || meter.section === 'outgoing_sub_sub') {
+        totalOutgoingSub += consumption;
+      }
+    });
+
+    return {
+      totalIncoming,
+      totalOutgoingMain,
+      totalOutgoingSub,
+    };
+  }, [gasStatsData, gasPriorReadings]);
   const totalGasIncomer = gasStats.totalIncoming;
   const totalGasHeaders = gasStats.totalOutgoingMain;
   const totalGasAppliances = gasStats.totalOutgoingSub;
@@ -876,7 +993,7 @@ export default function DashboardPage() {
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4 stagger-children">
                   <StatCard
                     label="RMS Incomer"
-                    value={`${totalGasIncomer.toLocaleString(undefined, { maximumFractionDigits: 0 })} ${gasUnit}`}
+                    value={`${totalGasIncomer.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${gasUnit}`}
                     accentColor="var(--color-warning)"
                     icon={
                       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -886,7 +1003,7 @@ export default function DashboardPage() {
                   />
                   <StatCard
                     label="Consumption In Headers"
-                    value={`${totalGasHeaders.toLocaleString(undefined, { maximumFractionDigits: 0 })} ${gasUnit}`}
+                    value={`${totalGasHeaders.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${gasUnit}`}
                     accentColor="var(--color-accent)"
                     icon={
                       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -898,7 +1015,7 @@ export default function DashboardPage() {
                   />
                   <StatCard
                     label="Consumption In Appliances"
-                    value={`${totalGasAppliances.toLocaleString(undefined, { maximumFractionDigits: 0 })} ${gasUnit}`}
+                    value={`${totalGasAppliances.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${gasUnit}`}
                     accentColor="var(--color-success)"
                     icon={
                       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
