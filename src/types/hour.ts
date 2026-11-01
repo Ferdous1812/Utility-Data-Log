@@ -10,11 +10,13 @@ export interface HourMeter {
   name: string;
   equipment_group: HourEquipmentGroup;
   category: string;
+  parent_id?: string | null;
   multiplication_factor: number;
   sort_order: number;
   is_active: boolean;
   created_at: string;
   // Joined / derived
+  parent?: HourMeter | null;
   devices?: HourMeterDevice[];
 }
 

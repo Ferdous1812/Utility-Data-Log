@@ -20,15 +20,21 @@ export interface AvailableMeterForGas {
 export async function getGasMeters(): Promise<GasMeter[]> {
   const supabase = await createClient();
 
-  const { data, error } = await supabase
-    .from('gas_meters')
-    .select(`
-      *,
-      devices:gas_meter_devices(*)
-    `)
-    .eq('is_active', true)
-    .order('sort_order', { ascending: true })
-    .order('name', { ascending: true });
+  const [{ data, error }, { data: legacyMeters }] = await Promise.all([
+    supabase
+      .from('gas_meters')
+      .select(`
+        *,
+        devices:gas_meter_devices(*)
+      `)
+      .eq('is_active', true)
+      .order('sort_order', { ascending: true })
+      .order('name', { ascending: true }),
+    supabase
+      .from('meters')
+      .select('id, parent_meter_id')
+      .eq('is_active', true),
+  ]);
 
   if (error) {
     if (error.code === '42P01' || error.message.includes('schema cache')) {
@@ -39,13 +45,19 @@ export async function getGasMeters(): Promise<GasMeter[]> {
     return [];
   }
 
+  const legacyParentMap = new Map<string, string | null>(
+    (legacyMeters || []).map((lm) => [lm.id, lm.parent_meter_id])
+  );
+
   // Ensure every gas meter has at least one billing primary device reference
   const meters = (data || []) as GasMeter[];
-  return meters.map((m) => {
+  return meters.map((m: any) => {
+    const parentId = m.parent_id || legacyParentMap.get(m.id) || null;
     const devices = m.devices || [];
     if (devices.length === 0) {
       return {
         ...m,
+        parent_id: parentId,
         devices: [
           {
             id: m.id,
@@ -59,7 +71,10 @@ export async function getGasMeters(): Promise<GasMeter[]> {
         ],
       };
     }
-    return m;
+    return {
+      ...m,
+      parent_id: parentId,
+    };
   });
 }
 

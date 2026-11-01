@@ -20,15 +20,21 @@ export interface AvailableMeterForHour {
 export async function getHourMeters(): Promise<HourMeter[]> {
   const supabase = await createClient();
 
-  const { data, error } = await supabase
-    .from('hour_meters')
-    .select(`
-      *,
-      devices:hour_meter_devices(*)
-    `)
-    .eq('is_active', true)
-    .order('sort_order', { ascending: true })
-    .order('name', { ascending: true });
+  const [{ data, error }, { data: legacyMeters }] = await Promise.all([
+    supabase
+      .from('hour_meters')
+      .select(`
+        *,
+        devices:hour_meter_devices(*)
+      `)
+      .eq('is_active', true)
+      .order('sort_order', { ascending: true })
+      .order('name', { ascending: true }),
+    supabase
+      .from('meters')
+      .select('id, parent_meter_id')
+      .eq('is_active', true),
+  ]);
 
   if (error) {
     // If table doesn't exist yet, log warning and return empty
@@ -40,13 +46,19 @@ export async function getHourMeters(): Promise<HourMeter[]> {
     return [];
   }
 
+  const legacyParentMap = new Map<string, string | null>(
+    (legacyMeters || []).map((lm) => [lm.id, lm.parent_meter_id])
+  );
+
   // Ensure every hour meter has at least one billing primary device reference
   const meters = (data || []) as HourMeter[];
-  return meters.map((m) => {
+  return meters.map((m: any) => {
+    const parentId = m.parent_id || legacyParentMap.get(m.id) || null;
     const devices = m.devices || [];
     if (devices.length === 0) {
       return {
         ...m,
+        parent_id: parentId,
         devices: [
           {
             id: m.id,
@@ -60,7 +72,10 @@ export async function getHourMeters(): Promise<HourMeter[]> {
         ],
       };
     }
-    return m;
+    return {
+      ...m,
+      parent_id: parentId,
+    };
   });
 }
 

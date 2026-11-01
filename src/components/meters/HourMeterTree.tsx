@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { format } from 'date-fns';
 import type {
@@ -418,6 +418,11 @@ function HourMeterTableRow({
   isSelected,
   onToggleSelect,
   onEditMeter,
+  level = 0,
+  childCount = 0,
+  isCollapsed = false,
+  onToggleCollapse,
+  isHierarchyView = false,
 }: {
   meter: HourMeter;
   devices: HourMeterDevice[];
@@ -426,8 +431,36 @@ function HourMeterTableRow({
   isSelected: boolean;
   onToggleSelect: (id: string) => void;
   onEditMeter: (meter: HourMeter) => void;
+  level?: number;
+  childCount?: number;
+  isCollapsed?: boolean;
+  onToggleCollapse?: (id: string) => void;
+  isHierarchyView?: boolean;
 }) {
   const data = getHourMeterReadingData(meter, devices, logs, priorReadings);
+
+  const plClass = !isHierarchyView
+    ? 'px-2.5'
+    : level === 0
+    ? 'pl-2.5 pr-2'
+    : level === 1
+    ? 'pl-6 pr-2'
+    : level === 2
+    ? 'pl-10 pr-2'
+    : level === 3
+    ? 'pl-14 pr-2'
+    : 'pl-18 pr-2';
+
+  const branchPrefix =
+    level === 1 ? '└─ ' :
+    level === 2 ? '└─── ' :
+    level >= 3 ? '└───── ' :
+    '';
+
+  const branchColor =
+    level === 1 ? 'text-accent/80' :
+    level === 2 ? 'text-success/80' :
+    'text-danger/80';
 
   return (
     <tr
@@ -435,17 +468,34 @@ function HourMeterTableRow({
       className={`transition-colors cursor-pointer select-none ${
         isSelected
           ? 'bg-accent/10 hover:bg-accent/15'
+          : isHierarchyView
+          ? level >= 2
+            ? 'bg-bg-primary/50 hover:bg-bg-surface-hover/70'
+            : level === 1
+            ? 'bg-bg-primary/25 hover:bg-bg-surface-hover/70'
+            : 'hover:bg-bg-surface-hover/70'
           : 'hover:bg-bg-surface-hover/70'
       }`}
     >
       {/* Meter Name + Selection Checkbox + Status Dot */}
       <td
-        className={`sticky left-0 z-10 px-2.5 py-1.5 transition-colors ${
-          isSelected ? 'bg-bg-surface/90' : 'bg-bg-elevated'
+        className={`sticky left-0 z-10 py-1.5 transition-colors ${plClass} ${
+          isSelected
+            ? 'bg-bg-surface/90'
+            : isHierarchyView && level > 0
+            ? 'bg-bg-elevated/95'
+            : 'bg-bg-elevated'
         }`}
       >
         <div className="flex items-center justify-between gap-1.5 min-w-0">
-          <div className="flex items-center gap-2 min-w-0">
+          <div className="flex items-center gap-1.5 min-w-0">
+            {/* Tree branch connector */}
+            {isHierarchyView && level > 0 && (
+              <span className={`font-mono text-[11px] shrink-0 font-bold ${branchColor}`}>
+                {branchPrefix}
+              </span>
+            )}
+
             <input
               type="checkbox"
               checked={isSelected}
@@ -457,13 +507,54 @@ function HourMeterTableRow({
               className="w-3.5 h-3.5 accent-accent rounded cursor-pointer flex-shrink-0"
               aria-label={`Select ${meter.name}`}
             />
-            <span
-              className="w-2 h-2 rounded-full flex-shrink-0 bg-success"
-              title="Active Meter"
-            />
-            <span className="font-semibold text-text-primary truncate text-xs">
-              {meter.name}
-            </span>
+
+            {/* Tree collapse/expand button (if meter has children in hierarchy view) */}
+            {isHierarchyView && childCount > 0 ? (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onToggleCollapse?.(meter.id);
+                }}
+                className="p-0.5 text-accent hover:bg-accent/10 rounded transition-all flex items-center gap-1.5 focus:outline-none min-w-0 cursor-pointer"
+                title={isCollapsed ? 'Expand child equipment' : 'Collapse child equipment'}
+              >
+                <svg
+                  width="12"
+                  height="12"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.5"
+                  className={`shrink-0 transition-transform duration-200 ${
+                    isCollapsed ? '-rotate-90 text-text-muted' : 'rotate-0 text-accent'
+                  }`}
+                >
+                  <polyline points="6 9 12 15 18 9" />
+                </svg>
+                <span className="truncate text-xs font-semibold text-text-primary" title={meter.name}>
+                  {meter.name}
+                </span>
+                <span className="text-[10px] font-normal px-1.5 py-0.2 rounded-full bg-accent/15 text-accent shrink-0">
+                  {childCount}
+                </span>
+              </button>
+            ) : (
+              <div className="flex items-center gap-2 min-w-0">
+                <span
+                  className="w-2 h-2 rounded-full flex-shrink-0 bg-success"
+                  title="Active Meter"
+                />
+                <span
+                  className={`truncate text-xs ${
+                    isHierarchyView && level > 0 ? 'text-text-secondary' : 'font-semibold text-text-primary'
+                  }`}
+                  title={meter.name}
+                >
+                  {meter.name}
+                </span>
+              </div>
+            )}
           </div>
 
           {/* Edit icon */}
@@ -522,6 +613,270 @@ function HourMeterTableRow({
   );
 }
 
+// ─── Hierarchy / Mother-Child Tree View ─────────────────────
+
+function HourHierarchyMeterView({
+  meters,
+  devices,
+  logs,
+  priorReadings,
+  selectedMeterIds,
+  collapsedMeterIds,
+  onToggleSelect,
+  onSelectGroup,
+  onToggleCollapse,
+  onEditMeter,
+}: {
+  meters: HourMeter[];
+  devices: HourMeterDevice[];
+  logs: HourReadingLog[];
+  priorReadings?: Record<string, HourReadingLog>;
+  selectedMeterIds: Set<string>;
+  collapsedMeterIds: Set<string>;
+  onToggleSelect: (id: string) => void;
+  onSelectGroup: (groupMeters: HourMeter[]) => void;
+  onToggleCollapse: (id: string) => void;
+  onEditMeter: (meter: HourMeter) => void;
+}) {
+  const tierLabels = useTierLabels();
+  const meterIds = useMemo(() => new Set(meters.map((m) => m.id)), [meters]);
+
+  const sortMeters = useCallback(
+    (list: HourMeter[]) =>
+      [...list].sort((a, b) => {
+        const soA = a.sort_order ?? 0;
+        const soB = b.sort_order ?? 0;
+        if (soA !== soB) return soA - soB;
+        return a.name.localeCompare(b.name);
+      }),
+    []
+  );
+
+  // Helper to collect all meters in a subtree recursively
+  const getSubtreeMeters = useCallback(
+    (root: HourMeter): HourMeter[] => {
+      const list: HourMeter[] = [root];
+      const children = sortMeters(meters.filter((m) => m.parent_id === root.id));
+      for (const child of children) {
+        list.push(...getSubtreeMeters(child));
+      }
+      return list;
+    },
+    [meters, sortMeters]
+  );
+
+  const getGroupMeters = useCallback(
+    (roots: HourMeter[]): HourMeter[] => {
+      const set = new Set<string>();
+      const result: HourMeter[] = [];
+      roots.forEach((root) => {
+        getSubtreeMeters(root).forEach((m) => {
+          if (!set.has(m.id)) {
+            set.add(m.id);
+            result.push(m);
+          }
+        });
+      });
+      return result;
+    },
+    [getSubtreeMeters]
+  );
+
+  // Group root meters by equipment group
+  const compressorRoots = useMemo(
+    () => sortMeters(meters.filter((m) => getHourMeterGroup(m) === 'Compressor' && (!m.parent_id || !meterIds.has(m.parent_id)))),
+    [meters, meterIds, sortMeters]
+  );
+  const pumpRoots = useMemo(
+    () => sortMeters(meters.filter((m) => getHourMeterGroup(m) === 'Pump' && (!m.parent_id || !meterIds.has(m.parent_id)))),
+    [meters, meterIds, sortMeters]
+  );
+  const generatorRoots = useMemo(
+    () => sortMeters(meters.filter((m) => getHourMeterGroup(m) === 'Generator' && (!m.parent_id || !meterIds.has(m.parent_id)))),
+    [meters, meterIds, sortMeters]
+  );
+  const otherRoots = useMemo(
+    () => sortMeters(meters.filter((m) => getHourMeterGroup(m) === 'Other' && (!m.parent_id || !meterIds.has(m.parent_id)))),
+    [meters, meterIds, sortMeters]
+  );
+
+  const compressorGroupMeters = useMemo(() => getGroupMeters(compressorRoots), [getGroupMeters, compressorRoots]);
+  const pumpGroupMeters = useMemo(() => getGroupMeters(pumpRoots), [getGroupMeters, pumpRoots]);
+  const generatorGroupMeters = useMemo(() => getGroupMeters(generatorRoots), [getGroupMeters, generatorRoots]);
+  const otherGroupMeters = useMemo(() => getGroupMeters(otherRoots), [getGroupMeters, otherRoots]);
+
+  // Compute total run hours for each group
+  const computeTotalHours = useCallback(
+    (groupList: HourMeter[]) =>
+      groupList.reduce((acc, m) => {
+        const data = getHourMeterReadingData(m, devices, logs, priorReadings);
+        return acc + (data.consumption || 0);
+      }, 0),
+    [devices, logs, priorReadings]
+  );
+
+  const compressorHours = useMemo(() => computeTotalHours(compressorGroupMeters), [computeTotalHours, compressorGroupMeters]);
+  const pumpHours = useMemo(() => computeTotalHours(pumpGroupMeters), [computeTotalHours, pumpGroupMeters]);
+  const generatorHours = useMemo(() => computeTotalHours(generatorGroupMeters), [computeTotalHours, generatorGroupMeters]);
+  const otherHours = useMemo(() => computeTotalHours(otherGroupMeters), [computeTotalHours, otherGroupMeters]);
+
+  const compressorAllSelected = compressorGroupMeters.length > 0 && compressorGroupMeters.every((m) => selectedMeterIds.has(m.id));
+  const pumpAllSelected = pumpGroupMeters.length > 0 && pumpGroupMeters.every((m) => selectedMeterIds.has(m.id));
+  const generatorAllSelected = generatorGroupMeters.length > 0 && generatorGroupMeters.every((m) => selectedMeterIds.has(m.id));
+  const otherAllSelected = otherGroupMeters.length > 0 && otherGroupMeters.every((m) => selectedMeterIds.has(m.id));
+
+  // Recursive node renderer
+  const renderMeterNode = (meter: HourMeter, level = 0): React.ReactNode => {
+    const children = sortMeters(meters.filter((m) => m.parent_id === meter.id));
+    const isCollapsed = collapsedMeterIds.has(meter.id);
+
+    return (
+      <React.Fragment key={meter.id}>
+        <HourMeterTableRow
+          meter={meter}
+          devices={devices}
+          logs={logs}
+          priorReadings={priorReadings}
+          isSelected={selectedMeterIds.has(meter.id)}
+          onToggleSelect={onToggleSelect}
+          onEditMeter={onEditMeter}
+          level={level}
+          childCount={children.length}
+          isCollapsed={isCollapsed}
+          onToggleCollapse={onToggleCollapse}
+          isHierarchyView={true}
+        />
+        {!isCollapsed &&
+          children.map((child) => renderMeterNode(child, level + 1))}
+      </React.Fragment>
+    );
+  };
+
+  if (meters.length === 0) {
+    return (
+      <div className="text-center py-4">
+        <p className="text-xs text-text-muted">No hour meters configured yet.</p>
+      </div>
+    );
+  }
+
+  const sections = [
+    {
+      key: 'Compressor',
+      title: tierLabels.hour_compressor || 'Compressors',
+      roots: compressorRoots,
+      groupMeters: compressorGroupMeters,
+      hours: compressorHours,
+      allSelected: compressorAllSelected,
+      badgeBg: 'bg-accent/10 text-accent border-accent/20',
+      headerBg: 'bg-accent/10 border-y border-accent/20 text-accent',
+    },
+    {
+      key: 'Pump',
+      title: tierLabels.hour_pump || 'Pumps',
+      roots: pumpRoots,
+      groupMeters: pumpGroupMeters,
+      hours: pumpHours,
+      allSelected: pumpAllSelected,
+      badgeBg: 'bg-warning/10 text-warning border-warning/20',
+      headerBg: 'bg-warning/10 border-y border-warning/20 text-warning',
+    },
+    {
+      key: 'Generator',
+      title: tierLabels.hour_generator || 'Generators',
+      roots: generatorRoots,
+      groupMeters: generatorGroupMeters,
+      hours: generatorHours,
+      allSelected: generatorAllSelected,
+      badgeBg: 'bg-success/10 text-success border-success/20',
+      headerBg: 'bg-success/10 border-y border-success/20 text-success',
+    },
+    {
+      key: 'Other',
+      title: tierLabels.hour_other || 'Other Equipment',
+      roots: otherRoots,
+      groupMeters: otherGroupMeters,
+      hours: otherHours,
+      allSelected: otherAllSelected,
+      badgeBg: 'bg-text-muted/10 text-text-secondary border-border/40',
+      headerBg: 'bg-bg-surface-hover/80 border-y border-border text-text-secondary',
+    },
+  ].filter((s) => s.roots.length > 0);
+
+  return (
+    <div className="overflow-x-auto border border-border/80 rounded-[var(--radius-md)] bg-bg-elevated shadow-xs animate-fade-in">
+      <table className="w-full text-xs border-collapse table-fixed min-w-[840px]">
+        <colgroup>
+          <col className="w-[180px] sm:w-[260px]" />
+          <col className="w-[95px]" />
+          <col className="w-[85px]" />
+          <col className="w-[110px]" />
+          <col className="w-[85px]" />
+          <col className="w-[85px]" />
+          <col className="w-[65px]" />
+          <col className="w-[100px]" />
+        </colgroup>
+        <thead className="sticky top-0 z-20 bg-table-header text-[10px] font-bold uppercase tracking-wider text-white border-b border-border select-none">
+          <tr>
+            <th className="sticky left-0 z-30 bg-table-header px-2.5 py-1.5 text-left text-white">
+              Meter Hierarchy & Name
+            </th>
+            <th className="px-2 py-1.5 text-right whitespace-nowrap text-white">
+              Prev Reading
+            </th>
+            <th className="px-1.5 py-1.5 text-center whitespace-nowrap text-white">
+              Prev Date
+            </th>
+            <th className="px-2 py-1.5 text-right whitespace-nowrap text-white">
+              Current Reading
+            </th>
+            <th className="px-1.5 py-1.5 text-center whitespace-nowrap text-white">
+              Current Date
+            </th>
+            <th className="px-2 py-1.5 text-right whitespace-nowrap text-white">
+              Difference
+            </th>
+            <th className="px-1 py-1.5 text-center whitespace-nowrap text-white">
+              MF
+            </th>
+            <th className="px-2.5 py-1.5 text-right whitespace-nowrap text-white">
+              Run Hours
+            </th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-border/60">
+          {sections.map((sec) => (
+            <React.Fragment key={sec.key}>
+              <tr className={sec.headerBg}>
+                <td colSpan={8} className="px-2.5 py-1.5">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold text-[10px] uppercase tracking-wider">
+                        {sec.title} ({sec.groupMeters.length} meter{sec.groupMeters.length !== 1 ? 's' : ''})
+                      </span>
+                      <span className={`text-[10px] font-semibold px-2 py-0.2 rounded border ${sec.badgeBg}`}>
+                        {sec.hours.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} hrs
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => onSelectGroup(sec.groupMeters)}
+                      className="text-[10px] text-text-muted hover:text-accent font-medium px-1.5 py-0.5 rounded hover:bg-bg-surface-hover transition-colors cursor-pointer"
+                    >
+                      {sec.allSelected ? 'Deselect Group' : 'Select Group'}
+                    </button>
+                  </div>
+                </td>
+              </tr>
+              {sec.roots.map((root) => renderMeterNode(root, 0))}
+            </React.Fragment>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 // ─── Main HourMeterTree Component ───────────────────────────
 
 export function HourMeterTree({
@@ -539,6 +894,60 @@ export function HourMeterTree({
   const [selectedMeterIds, setSelectedMeterIds] = useState<Set<string>>(new Set());
   const [copied, setCopied] = useState(false);
   const [editingMeter, setEditingMeter] = useState<HourMeter | null>(null);
+
+  // View Mode: 'group' (default equipment group accordion) vs 'tree' (mother-child hierarchy)
+  const [viewMode, setViewMode] = useState<'group' | 'tree'>('group');
+  const [collapsedMeterIds, setCollapsedMeterIds] = useState<Set<string>>(new Set());
+
+  // Load user view preference from localStorage
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('hour_meter_view_mode');
+      if (saved === 'group' || saved === 'tree') {
+        setViewMode(saved);
+      }
+    } catch {}
+  }, []);
+
+  const handleViewModeChange = (mode: 'group' | 'tree') => {
+    setViewMode(mode);
+    try {
+      localStorage.setItem('hour_meter_view_mode', mode);
+    } catch {}
+  };
+
+  const handleToggleCollapse = (meterId: string) => {
+    setCollapsedMeterIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(meterId)) {
+        next.delete(meterId);
+      } else {
+        next.add(meterId);
+      }
+      return next;
+    });
+  };
+
+  const allParentIds = useMemo(() => {
+    return meters
+      .filter((m) => meters.some((child) => child.parent_id === m.id))
+      .map((m) => m.id);
+  }, [meters]);
+
+  const isAllTreeExpanded = collapsedMeterIds.size === 0;
+
+  const toggleExpandCollapseTree = () => {
+    if (isAllTreeExpanded) {
+      setCollapsedMeterIds(new Set(allParentIds));
+    } else {
+      setCollapsedMeterIds(new Set());
+    }
+  };
+
+  const hasChildAvailable = useMemo(() => {
+    const ids = new Set(meters.map((m) => m.id));
+    return meters.some((m) => m.parent_id && ids.has(m.parent_id));
+  }, [meters]);
 
   // Group meters into Compressor, Pump, Generator, Other
   const groupedMeters = useMemo(() => {
@@ -649,6 +1058,24 @@ export function HourMeterTree({
     }
   };
 
+  const isExpanded = viewMode === 'tree' ? isAllTreeExpanded : isAllGroupsOpen;
+  const handleToggleExpandCollapse = viewMode === 'tree' ? toggleExpandCollapseTree : toggleAllGroups;
+
+  const handleSelectGroup = (groupMeters: HourMeter[]) => {
+    const allSelected = groupMeters.every((m) => selectedMeterIds.has(m.id));
+    setSelectedMeterIds((prev) => {
+      const next = new Set(prev);
+      groupMeters.forEach((m) => {
+        if (allSelected) {
+          next.delete(m.id);
+        } else {
+          next.add(m.id);
+        }
+      });
+      return next;
+    });
+  };
+
   const handleToggleGroup = (g: string) => {
     setOpenGroupKeys((prev) => {
       const next = new Set(prev);
@@ -663,10 +1090,59 @@ export function HourMeterTree({
 
   return (
     <div className="space-y-3 pb-24">
-      {/* Quick selection & single Expand/Collapse toggle */}
-      {activeGroups.length > 0 && (
+      {/* View Switcher, Quick selection & single Expand/Collapse toggle */}
+      {meters.length > 0 && (
         <div className="flex flex-wrap items-center justify-between gap-2 px-1 text-[11px] text-text-muted">
           <div className="flex flex-wrap items-center gap-2 sm:gap-2.5">
+            {/* View mode toggle icons (beside Select All Meters) */}
+            <div className="flex items-center bg-bg-surface border border-border rounded-[var(--radius-sm)] p-0.5 shadow-2xs">
+              <button
+                type="button"
+                onClick={() => handleViewModeChange('group')}
+                className={`flex items-center gap-1.5 px-2 py-0.5 rounded transition-all cursor-pointer text-[11px] font-medium ${
+                  viewMode === 'group'
+                    ? 'bg-accent text-white shadow-xs'
+                    : 'text-text-muted hover:text-text-primary hover:bg-bg-surface-hover'
+                }`}
+                title="Equipment Groups View (Default - grouped by machinery equipment type)"
+                aria-label="Equipment Groups View"
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3" y="3" width="7" height="7" />
+                  <rect x="14" y="3" width="7" height="7" />
+                  <rect x="14" y="14" width="7" height="7" />
+                  <rect x="3" y="14" width="7" height="7" />
+                </svg>
+                <span>Groups</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleViewModeChange('tree')}
+                className={`flex items-center gap-1.5 px-2 py-0.5 rounded transition-all cursor-pointer text-[11px] font-medium ${
+                  viewMode === 'tree'
+                    ? 'bg-accent text-white shadow-xs'
+                    : 'text-text-muted hover:text-text-primary hover:bg-bg-surface-hover'
+                }`}
+                title="Mother-Child Hierarchy View (arranged in parent-child hierarchy like Energy & Settings page)"
+                aria-label="Mother-Child Tree View"
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="6" cy="6" r="3" />
+                  <circle cx="18" cy="18" r="3" />
+                  <circle cx="18" cy="6" r="3" />
+                  <path d="M6 9v9a3 3 0 0 0 3 3h6" />
+                  <path d="M6 6h9" />
+                </svg>
+                <span>Mother-Child</span>
+                {hasChildAvailable && (
+                  <span className="w-1.5 h-1.5 rounded-full bg-success ring-1 ring-success/30 ml-0.5" title="Child equipment available" />
+                )}
+              </button>
+            </div>
+
+            <div className="h-3.5 w-px bg-border/60" />
+
             <button
               type="button"
               onClick={() => {
@@ -697,42 +1173,56 @@ export function HourMeterTree({
             <div className="hidden sm:block h-3.5 w-px bg-border/60" />
             <button
               type="button"
-              onClick={toggleAllGroups}
+              onClick={handleToggleExpandCollapse}
               className="flex items-center gap-1 text-[11px] text-text-muted hover:text-accent font-medium transition-colors cursor-pointer px-2 py-0.5 rounded bg-bg-surface hover:bg-bg-surface-hover border border-border/60"
-              title={isAllGroupsOpen ? 'Collapse all' : 'Expand all'}
+              title={isExpanded ? 'Collapse all' : 'Expand all'}
             >
               <span className="text-[10px]">▼</span>
-              <span>{isAllGroupsOpen ? 'Collapse All' : 'Expand All'}</span>
+              <span>{isExpanded ? 'Collapse All' : 'Expand All'}</span>
             </button>
           </div>
         </div>
       )}
 
-      {/* Groups (Compressor, Pump, Generator, Other) */}
-      {activeGroups.map((groupKey) => (
-        <GroupAccordion
-          key={groupKey}
-          groupKey={groupKey}
-          meters={groupedMeters[groupKey]}
-          devices={devices}
-          logs={logs}
-          priorReadings={priorReadings}
-          isOpen={openGroupKeys.has(groupKey)}
-          onToggleOpen={() => handleToggleGroup(groupKey)}
-          selectedMeterIds={selectedMeterIds}
-          onToggleSelect={handleToggleSelect}
-          onSelectAllInGroup={handleSelectAllInGroup}
-          onEditMeter={(meter) => setEditingMeter(meter)}
-        />
-      ))}
-
-      {meters.length === 0 && (
+      {/* Main Content: Tree View vs Group Accordions */}
+      {meters.length === 0 ? (
         <div className="bg-bg-surface border border-border rounded-[var(--radius-md)] p-8 text-center">
           <h3 className="text-sm font-semibold text-text-primary mb-1">No Hour Meters Found</h3>
           <p className="text-xs text-text-muted max-w-sm mx-auto mb-4">
             Click &ldquo;Manage Meters&rdquo; in the top-right to include hour meters in this tracking tree.
           </p>
         </div>
+      ) : viewMode === 'tree' ? (
+        <HourHierarchyMeterView
+          meters={meters}
+          devices={devices}
+          logs={logs}
+          priorReadings={priorReadings}
+          selectedMeterIds={selectedMeterIds}
+          collapsedMeterIds={collapsedMeterIds}
+          onToggleSelect={handleToggleSelect}
+          onSelectGroup={handleSelectGroup}
+          onToggleCollapse={handleToggleCollapse}
+          onEditMeter={(meter) => setEditingMeter(meter)}
+        />
+      ) : (
+        /* Groups (Compressor, Pump, Generator, Other) */
+        activeGroups.map((groupKey) => (
+          <GroupAccordion
+            key={groupKey}
+            groupKey={groupKey}
+            meters={groupedMeters[groupKey]}
+            devices={devices}
+            logs={logs}
+            priorReadings={priorReadings}
+            isOpen={openGroupKeys.has(groupKey)}
+            onToggleOpen={() => handleToggleGroup(groupKey)}
+            selectedMeterIds={selectedMeterIds}
+            onToggleSelect={handleToggleSelect}
+            onSelectAllInGroup={handleSelectAllInGroup}
+            onEditMeter={(meter) => setEditingMeter(meter)}
+          />
+        ))
       )}
 
       {/* Floating Summation Footer Card */}

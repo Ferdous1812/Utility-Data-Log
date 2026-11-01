@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { format } from 'date-fns';
 import type {
@@ -472,6 +472,11 @@ function MeterTableRow({
   isSelected,
   onToggleSelect,
   onEditMeter,
+  level = 0,
+  childCount = 0,
+  isCollapsed = false,
+  onToggleCollapse,
+  isHierarchyView = false,
 }: {
   meter: EnergyMeter;
   devices: EnergyMeterDevice[];
@@ -480,9 +485,37 @@ function MeterTableRow({
   isSelected: boolean;
   onToggleSelect: (id: string) => void;
   onEditMeter: (meter: EnergyMeter) => void;
+  level?: number;
+  childCount?: number;
+  isCollapsed?: boolean;
+  onToggleCollapse?: (id: string) => void;
+  isHierarchyView?: boolean;
 }) {
   const isPrimary = meter.is_primary_for_total;
   const data = getMeterReadingData(meter, devices, logs, priorReadings);
+
+  const plClass = !isHierarchyView
+    ? 'px-2.5'
+    : level === 0
+    ? 'pl-2.5 pr-2'
+    : level === 1
+    ? 'pl-6 pr-2'
+    : level === 2
+    ? 'pl-10 pr-2'
+    : level === 3
+    ? 'pl-14 pr-2'
+    : 'pl-18 pr-2';
+
+  const branchPrefix =
+    level === 1 ? '└─ ' :
+    level === 2 ? '└─── ' :
+    level >= 3 ? '└───── ' :
+    '';
+
+  const branchColor =
+    level === 1 ? 'text-accent/80' :
+    level === 2 ? 'text-success/80' :
+    'text-danger/80';
 
   return (
     <tr
@@ -490,17 +523,34 @@ function MeterTableRow({
       className={`transition-colors cursor-pointer select-none ${
         isSelected
           ? 'bg-accent/10 hover:bg-accent/15'
+          : isHierarchyView
+          ? level >= 2
+            ? 'bg-bg-primary/50 hover:bg-bg-surface-hover/70'
+            : level === 1
+            ? 'bg-bg-primary/25 hover:bg-bg-surface-hover/70'
+            : 'hover:bg-bg-surface-hover/70'
           : 'hover:bg-bg-surface-hover/70'
       }`}
     >
       {/* Meter Name + Selection Checkbox + Status Dot */}
       <td
-        className={`sticky left-0 z-10 px-2.5 py-1.5 transition-colors ${
-          isSelected ? 'bg-bg-surface/90' : 'bg-bg-elevated'
+        className={`sticky left-0 z-10 py-1.5 transition-colors ${plClass} ${
+          isSelected
+            ? 'bg-bg-surface/90'
+            : isHierarchyView && level > 0
+            ? 'bg-bg-elevated/95'
+            : 'bg-bg-elevated'
         }`}
       >
         <div className="flex items-center justify-between gap-1.5 min-w-0">
-          <div className="flex items-center gap-2 min-w-0">
+          <div className="flex items-center gap-1.5 min-w-0">
+            {/* Tree branch connector */}
+            {isHierarchyView && level > 0 && (
+              <span className={`font-mono text-[11px] shrink-0 font-bold ${branchColor}`}>
+                {branchPrefix}
+              </span>
+            )}
+
             <input
               type="checkbox"
               checked={isSelected}
@@ -509,9 +559,48 @@ function MeterTableRow({
               className="w-3.5 h-3.5 rounded border-border text-accent focus:ring-accent/20 cursor-pointer accent-accent flex-shrink-0"
               aria-label={`Select ${meter.name}`}
             />
-            <span className="font-medium text-text-primary truncate text-xs" title={meter.name}>
-              {meter.name}
-            </span>
+
+            {/* Tree collapse/expand button (if meter has children in hierarchy view) */}
+            {isHierarchyView && childCount > 0 ? (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onToggleCollapse?.(meter.id);
+                }}
+                className="p-0.5 text-accent hover:bg-accent/10 rounded transition-all flex items-center gap-1.5 focus:outline-none min-w-0 cursor-pointer"
+                title={isCollapsed ? 'Expand child meters' : 'Collapse child meters'}
+              >
+                <svg
+                  width="12"
+                  height="12"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.5"
+                  className={`shrink-0 transition-transform duration-200 ${
+                    isCollapsed ? '-rotate-90 text-text-muted' : 'rotate-0 text-accent'
+                  }`}
+                >
+                  <polyline points="6 9 12 15 18 9" />
+                </svg>
+                <span className="truncate text-xs font-semibold text-text-primary" title={meter.name}>
+                  {meter.name}
+                </span>
+                <span className="text-[10px] font-normal px-1.5 py-0.2 rounded-full bg-accent/15 text-accent shrink-0">
+                  {childCount}
+                </span>
+              </button>
+            ) : (
+              <span
+                className={`truncate text-xs ${
+                  isHierarchyView && level > 0 ? 'text-text-secondary' : 'font-medium text-text-primary'
+                }`}
+                title={meter.name}
+              >
+                {meter.name}
+              </span>
+            )}
           </div>
           <button
             type="button"
@@ -571,6 +660,286 @@ function MeterTableRow({
         {formatUsage(data.consumption)}
       </td>
     </tr>
+  );
+}
+
+// ─── Hierarchy / Mother-Child Tree View ─────────────────────
+
+function HierarchyMeterView({
+  meters,
+  devices,
+  logs,
+  priorReadings,
+  selectedMeterIds,
+  collapsedMeterIds,
+  onToggleSelect,
+  onSelectGroup,
+  onToggleCollapse,
+  onEditMeter,
+  config,
+}: {
+  meters: EnergyMeter[];
+  devices: EnergyMeterDevice[];
+  logs: EnergyReadingLog[];
+  priorReadings?: Record<string, EnergyReadingLog>;
+  selectedMeterIds: Set<string>;
+  collapsedMeterIds: Set<string>;
+  onToggleSelect: (id: string) => void;
+  onSelectGroup: (groupMeters: EnergyMeter[]) => void;
+  onToggleCollapse: (id: string) => void;
+  onEditMeter: (meter: EnergyMeter) => void;
+  config: MeterPageConfig;
+}) {
+  const meterIds = useMemo(() => new Set(meters.map((m) => m.id)), [meters]);
+
+  const sortMeters = useCallback(
+    (list: EnergyMeter[]) =>
+      [...list].sort((a, b) => {
+        const soA = a.sort_order ?? 0;
+        const soB = b.sort_order ?? 0;
+        if (soA !== soB) return soA - soB;
+        return a.name.localeCompare(b.name);
+      }),
+    []
+  );
+
+  // Incoming Feeders / RMS Roots (incoming)
+  const incomingRoots = useMemo(
+    () => sortMeters(meters.filter((m) => m.section === 'incoming' && (!m.parent_id || !meterIds.has(m.parent_id)))),
+    [meters, meterIds, sortMeters]
+  );
+
+  // Standalone Distribution Headers that are NOT children of incoming meters in this list
+  const standaloneMotherRoots = useMemo(
+    () => sortMeters(meters.filter((m) => m.section === 'outgoing_main' && (!m.parent_id || !meterIds.has(m.parent_id)))),
+    [meters, meterIds, sortMeters]
+  );
+
+  // Unassigned Submeters (submeters whose parent is missing or not in this list)
+  const unassignedSubMeters = useMemo(
+    () => sortMeters(meters.filter((m) => (m.section === 'outgoing_sub' || m.section === 'outgoing_sub_sub') && (!m.parent_id || !meterIds.has(m.parent_id)))),
+    [meters, meterIds, sortMeters]
+  );
+
+  // Helper to collect all meters in a subtree recursively
+  const getSubtreeMeters = useCallback(
+    (root: EnergyMeter): EnergyMeter[] => {
+      const list: EnergyMeter[] = [root];
+      const children = sortMeters(meters.filter((m) => m.parent_id === root.id));
+      for (const child of children) {
+        list.push(...getSubtreeMeters(child));
+      }
+      return list;
+    },
+    [meters, sortMeters]
+  );
+
+  const getGroupMeters = useCallback(
+    (roots: EnergyMeter[]): EnergyMeter[] => {
+      const set = new Set<string>();
+      const result: EnergyMeter[] = [];
+      roots.forEach((root) => {
+        getSubtreeMeters(root).forEach((m) => {
+          if (!set.has(m.id)) {
+            set.add(m.id);
+            result.push(m);
+          }
+        });
+      });
+      return result;
+    },
+    [getSubtreeMeters]
+  );
+
+  const incomingGroupMeters = useMemo(() => getGroupMeters(incomingRoots), [getGroupMeters, incomingRoots]);
+  const standaloneGroupMeters = useMemo(() => getGroupMeters(standaloneMotherRoots), [getGroupMeters, standaloneMotherRoots]);
+  const unassignedGroupMeters = useMemo(() => getGroupMeters(unassignedSubMeters), [getGroupMeters, unassignedSubMeters]);
+
+  // Remaining meters (if any)
+  const allCategorizedIds = useMemo(
+    () => new Set([...incomingGroupMeters, ...standaloneGroupMeters, ...unassignedGroupMeters].map((m) => m.id)),
+    [incomingGroupMeters, standaloneGroupMeters, unassignedGroupMeters]
+  );
+  const otherRoots = useMemo(
+    () => sortMeters(meters.filter((m) => !allCategorizedIds.has(m.id) && (!m.parent_id || !meterIds.has(m.parent_id)))),
+    [meters, allCategorizedIds, meterIds, sortMeters]
+  );
+  const otherGroupMeters = useMemo(() => getGroupMeters(otherRoots), [getGroupMeters, otherRoots]);
+
+  const incomingAllSelected = incomingGroupMeters.length > 0 && incomingGroupMeters.every((m) => selectedMeterIds.has(m.id));
+  const standaloneAllSelected = standaloneGroupMeters.length > 0 && standaloneGroupMeters.every((m) => selectedMeterIds.has(m.id));
+  const unassignedAllSelected = unassignedGroupMeters.length > 0 && unassignedGroupMeters.every((m) => selectedMeterIds.has(m.id));
+  const otherAllSelected = otherGroupMeters.length > 0 && otherGroupMeters.every((m) => selectedMeterIds.has(m.id));
+
+  // Recursive node renderer
+  const renderMeterNode = (meter: EnergyMeter, level = 0): React.ReactNode => {
+    const children = sortMeters(meters.filter((m) => m.parent_id === meter.id));
+    const isCollapsed = collapsedMeterIds.has(meter.id);
+
+    return (
+      <React.Fragment key={meter.id}>
+        <MeterTableRow
+          meter={meter}
+          devices={devices}
+          logs={logs}
+          priorReadings={priorReadings}
+          isSelected={selectedMeterIds.has(meter.id)}
+          onToggleSelect={onToggleSelect}
+          onEditMeter={onEditMeter}
+          level={level}
+          childCount={children.length}
+          isCollapsed={isCollapsed}
+          onToggleCollapse={onToggleCollapse}
+          isHierarchyView={true}
+        />
+        {!isCollapsed &&
+          children.map((child) => renderMeterNode(child, level + 1))}
+      </React.Fragment>
+    );
+  };
+
+  if (meters.length === 0) {
+    return <EmptyState />;
+  }
+
+  const isGas = config.unitSymbol === 'm³';
+
+  return (
+    <div className="overflow-x-auto border border-border/80 rounded-[var(--radius-md)] bg-bg-elevated shadow-xs animate-fade-in">
+      <table className="w-full text-xs border-collapse table-fixed min-w-[840px]">
+        <colgroup>
+          <col className="w-[180px] sm:w-[260px]" />
+          <col className="w-[95px]" />
+          <col className="w-[85px]" />
+          <col className="w-[110px]" />
+          <col className="w-[85px]" />
+          <col className="w-[85px]" />
+          <col className="w-[65px]" />
+          <col className="w-[100px]" />
+        </colgroup>
+        <thead className="sticky top-0 z-20 bg-table-header text-[10px] font-bold uppercase tracking-wider text-white border-b border-border select-none">
+          <tr>
+            <th className="sticky left-0 z-30 bg-table-header px-2.5 py-1.5 text-left text-white">
+              Meter Hierarchy & Name
+            </th>
+            <th className="px-2 py-1.5 text-right whitespace-nowrap text-white">
+              Prev Reading
+            </th>
+            <th className="px-1.5 py-1.5 text-center whitespace-nowrap text-white">
+              Prev Date
+            </th>
+            <th className="px-2 py-1.5 text-right whitespace-nowrap text-white">
+              Current Reading
+            </th>
+            <th className="px-1.5 py-1.5 text-center whitespace-nowrap text-white">
+              Current Date
+            </th>
+            <th className="px-2 py-1.5 text-right whitespace-nowrap text-white">
+              Difference
+            </th>
+            <th className="px-1 py-1.5 text-center whitespace-nowrap text-white">
+              MF
+            </th>
+            <th className="px-2.5 py-1.5 text-right whitespace-nowrap text-white">
+              {config.consumptionLabel}
+            </th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-border/60">
+          {/* Incoming Feeders / RMS Roots */}
+          {incomingRoots.length > 0 && (
+            <>
+              <tr className="bg-warning/10 border-y border-warning/20">
+                <td colSpan={8} className="px-2.5 py-1.5">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-warning text-[10px] uppercase tracking-wider">
+                      {isGas ? 'RMS Room / Main Incomers' : 'Incoming Feeders & Sources'} ({incomingGroupMeters.length} meter{incomingGroupMeters.length !== 1 ? 's' : ''})
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => onSelectGroup(incomingGroupMeters)}
+                      className="text-[10px] text-text-muted hover:text-warning font-medium px-1.5 py-0.5 rounded hover:bg-warning/10 transition-colors cursor-pointer"
+                    >
+                      {incomingAllSelected ? 'Deselect Group' : 'Select Group'}
+                    </button>
+                  </div>
+                </td>
+              </tr>
+              {incomingRoots.map((root) => renderMeterNode(root, 0))}
+            </>
+          )}
+
+          {/* Standalone Distribution Headers */}
+          {standaloneMotherRoots.length > 0 && (
+            <>
+              <tr className="bg-accent/10 border-y border-accent/20">
+                <td colSpan={8} className="px-2.5 py-1.5">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-accent text-[10px] uppercase tracking-wider">
+                      {isGas ? 'Distribution Gas Headers & Main Lines' : 'Standalone Mother Panels & Feeder Trees'} ({standaloneGroupMeters.length} meter{standaloneGroupMeters.length !== 1 ? 's' : ''})
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => onSelectGroup(standaloneGroupMeters)}
+                      className="text-[10px] text-text-muted hover:text-accent font-medium px-1.5 py-0.5 rounded hover:bg-accent/10 transition-colors cursor-pointer"
+                    >
+                      {standaloneAllSelected ? 'Deselect Group' : 'Select Group'}
+                    </button>
+                  </div>
+                </td>
+              </tr>
+              {standaloneMotherRoots.map((root) => renderMeterNode(root, 0))}
+            </>
+          )}
+
+          {/* Unassigned Submeters (if any) */}
+          {unassignedSubMeters.length > 0 && (
+            <>
+              <tr className="bg-danger/10 border-y border-danger/20">
+                <td colSpan={8} className="px-2.5 py-1.5">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-danger text-[10px] uppercase tracking-wider">
+                      Unassigned Submeters ({unassignedGroupMeters.length} meter{unassignedGroupMeters.length !== 1 ? 's' : ''})
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => onSelectGroup(unassignedGroupMeters)}
+                      className="text-[10px] text-text-muted hover:text-danger font-medium px-1.5 py-0.5 rounded hover:bg-danger/10 transition-colors cursor-pointer"
+                    >
+                      {unassignedAllSelected ? 'Deselect Group' : 'Select Group'}
+                    </button>
+                  </div>
+                </td>
+              </tr>
+              {unassignedSubMeters.map((root) => renderMeterNode(root, 0))}
+            </>
+          )}
+
+          {/* Other / Uncategorized Meters (if any) */}
+          {otherRoots.length > 0 && (
+            <>
+              <tr className="bg-bg-surface-hover/80 border-y border-border">
+                <td colSpan={8} className="px-2.5 py-1.5">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-text-secondary text-[10px] uppercase tracking-wider">
+                      Other Meters ({otherGroupMeters.length} meter{otherGroupMeters.length !== 1 ? 's' : ''})
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => onSelectGroup(otherGroupMeters)}
+                      className="text-[10px] text-text-muted hover:text-accent font-medium px-1.5 py-0.5 rounded hover:bg-bg-surface-hover transition-colors cursor-pointer"
+                    >
+                      {otherAllSelected ? 'Deselect Group' : 'Select Group'}
+                    </button>
+                  </div>
+                </td>
+              </tr>
+              {otherRoots.map((root) => renderMeterNode(root, 0))}
+            </>
+          )}
+        </tbody>
+      </table>
+    </div>
   );
 }
 
@@ -685,6 +1054,56 @@ export function GenericMeterTree({
   ];
   const activeSections = sectionOrder.filter((section) => (grouped[section] || []).length > 0);
 
+  // View Mode: 'section' (current default) vs 'tree' (mother-child relation as in Energy)
+  const [viewMode, setViewMode] = useState<'section' | 'tree'>('section');
+  const [collapsedMeterIds, setCollapsedMeterIds] = useState<Set<string>>(new Set());
+
+  // Load user view preference from localStorage
+  useEffect(() => {
+    try {
+      const storageKey = config.unitSymbol === 'm³' ? 'gas_meter_view_mode' : 'generic_meter_view_mode';
+      const saved = localStorage.getItem(storageKey);
+      if (saved === 'section' || saved === 'tree') {
+        setViewMode(saved);
+      }
+    } catch {}
+  }, [config.unitSymbol]);
+
+  const handleViewModeChange = (mode: 'section' | 'tree') => {
+    setViewMode(mode);
+    try {
+      const storageKey = config.unitSymbol === 'm³' ? 'gas_meter_view_mode' : 'generic_meter_view_mode';
+      localStorage.setItem(storageKey, mode);
+    } catch {}
+  };
+
+  const handleToggleCollapse = (meterId: string) => {
+    setCollapsedMeterIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(meterId)) {
+        next.delete(meterId);
+      } else {
+        next.add(meterId);
+      }
+      return next;
+    });
+  };
+
+  const handleSelectGroup = (groupMeters: EnergyMeter[]) => {
+    const allSelected = groupMeters.every((m) => selectedMeterIds.has(m.id));
+    setSelectedMeterIds((prev) => {
+      const next = new Set(prev);
+      groupMeters.forEach((m) => {
+        if (allSelected) {
+          next.delete(m.id);
+        } else {
+          next.add(m.id);
+        }
+      });
+      return next;
+    });
+  };
+
   const [openSectionIds, setOpenSectionIds] = useState<Set<string>>(
     () => new Set(['incoming', 'outgoing_main', 'outgoing_sub', 'outgoing_sub_sub'])
   );
@@ -698,6 +1117,31 @@ export function GenericMeterTree({
       setOpenSectionIds(new Set(activeSections));
     }
   };
+
+  // Hierarchy Tree expand/collapse state
+  const allParentIds = useMemo(() => {
+    return meters
+      .filter((m) => meters.some((child) => child.parent_id === m.id))
+      .map((m) => m.id);
+  }, [meters]);
+
+  const isAllTreeExpanded = collapsedMeterIds.size === 0;
+
+  const toggleExpandCollapseTree = () => {
+    if (isAllTreeExpanded) {
+      setCollapsedMeterIds(new Set(allParentIds));
+    } else {
+      setCollapsedMeterIds(new Set());
+    }
+  };
+
+  const isExpanded = viewMode === 'tree' ? isAllTreeExpanded : isAllSectionsOpen;
+  const handleToggleExpandCollapse = viewMode === 'tree' ? toggleExpandCollapseTree : toggleAllSections;
+
+  const hasChildAvailable = useMemo(() => {
+    const idSet = new Set(meters.map((m) => m.id));
+    return meters.some((m) => m.parent_id && idSet.has(m.parent_id));
+  }, [meters]);
 
   const handleToggleSection = (section: string) => {
     setOpenSectionIds((prev) => {
@@ -718,6 +1162,56 @@ export function GenericMeterTree({
       {/* Legend & quick selection action */}
       <div className="flex flex-wrap items-center justify-between gap-2 px-1 text-[11px] text-text-muted">
         <div className="flex flex-wrap items-center gap-2 sm:gap-2.5">
+          {/* View mode toggle icons (beside Select All Meters) */}
+          <div className="flex items-center bg-bg-surface border border-border rounded-[var(--radius-sm)] p-0.5 shadow-2xs">
+            <button
+              type="button"
+              onClick={() => handleViewModeChange('section')}
+              className={`flex items-center gap-1.5 px-2 py-0.5 rounded transition-all cursor-pointer text-[11px] font-medium ${
+                viewMode === 'section'
+                  ? 'bg-accent text-white shadow-xs'
+                  : 'text-text-muted hover:text-text-primary hover:bg-bg-surface-hover'
+              }`}
+              title="Section View (Default - grouped by section accordions)"
+              aria-label="Section View"
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="3" width="7" height="7" />
+                <rect x="14" y="3" width="7" height="7" />
+                <rect x="14" y="14" width="7" height="7" />
+                <rect x="3" y="14" width="7" height="7" />
+              </svg>
+              <span>Sections</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => handleViewModeChange('tree')}
+              className={`flex items-center gap-1.5 px-2 py-0.5 rounded transition-all cursor-pointer text-[11px] font-medium ${
+                viewMode === 'tree'
+                  ? 'bg-accent text-white shadow-xs'
+                  : 'text-text-muted hover:text-text-primary hover:bg-bg-surface-hover'
+              }`}
+              title="Mother-Child Hierarchy View (arranged in same pattern as Energy & Settings page)"
+              aria-label="Mother-Child Tree View"
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="6" cy="6" r="3" />
+                <circle cx="18" cy="18" r="3" />
+                <circle cx="18" cy="6" r="3" />
+                <path d="M6 9v9a3 3 0 0 0 3 3h6" />
+                <path d="M6 6h9" />
+              </svg>
+              <span>Mother-Child</span>
+              {hasChildAvailable && (
+                <span className="w-1.5 h-1.5 rounded-full bg-success ring-1 ring-success/30 ml-0.5" title="Child meters available" />
+              )}
+            </button>
+          </div>
+
+          <div className="h-3.5 w-px bg-border/60" />
+
+          {/* Select all meters */}
           <button
             type="button"
             onClick={handleSelectAll}
@@ -742,12 +1236,12 @@ export function GenericMeterTree({
           <div className="hidden sm:block h-3.5 w-px bg-border/60" />
           <button
             type="button"
-            onClick={toggleAllSections}
+            onClick={handleToggleExpandCollapse}
             className="flex items-center gap-1 text-[11px] text-text-muted hover:text-accent font-medium transition-colors cursor-pointer px-2 py-0.5 rounded bg-bg-surface hover:bg-bg-surface-hover border border-border/60"
-            title={isAllSectionsOpen ? 'Collapse all' : 'Expand all'}
+            title={isExpanded ? 'Collapse all' : 'Expand all'}
           >
             <span className="text-[10px]">▼</span>
-            <span>{isAllSectionsOpen ? 'Collapse All' : 'Expand All'}</span>
+            <span>{isExpanded ? 'Collapse All' : 'Expand All'}</span>
           </button>
         </div>
 
@@ -773,6 +1267,20 @@ export function GenericMeterTree({
             Click &ldquo;Manage Meters&rdquo; to add or configure {config.pageTitle.toLowerCase()}.
           </p>
         </div>
+      ) : viewMode === 'tree' ? (
+        <HierarchyMeterView
+          meters={meters}
+          devices={devices}
+          logs={logs}
+          priorReadings={priorReadings}
+          selectedMeterIds={selectedMeterIds}
+          collapsedMeterIds={collapsedMeterIds}
+          onToggleSelect={handleToggleSelect}
+          onSelectGroup={handleSelectGroup}
+          onToggleCollapse={handleToggleCollapse}
+          onEditMeter={(m) => setEditingMeter(m)}
+          config={config}
+        />
       ) : (
         activeSections.map((section) => (
           <SectionAccordion
