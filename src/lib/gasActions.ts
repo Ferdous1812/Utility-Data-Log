@@ -62,6 +62,7 @@ export async function addGasMeter(formData: {
     });
 
     revalidatePath('/gas-meters');
+    revalidatePath('/consumption');
     return { success: true, message: `Gas meter "${formData.name}" added!`, id: data.id };
   } catch (err) {
     return { success: false, message: (err as Error).message };
@@ -99,6 +100,7 @@ export async function updateGasMeterQuickAction(
     }
 
     revalidatePath('/gas-meters');
+    revalidatePath('/consumption');
     return { success: true, message: `Meter "${trimmedName}" updated!` };
   } catch (err) {
     return { success: false, message: (err as Error).message };
@@ -121,6 +123,7 @@ export async function deleteGasMeter(
     }
 
     revalidatePath('/gas-meters');
+    revalidatePath('/consumption');
     return { success: true, message: 'Gas meter removed.' };
   } catch (err) {
     return { success: false, message: (err as Error).message };
@@ -192,10 +195,12 @@ export async function toggleMeterInGasAction(
       }
 
       revalidatePath('/gas-meters');
+    revalidatePath('/consumption');
       return { success: true, message: `"${meter.name}" included in Gas Meters!` };
     } else {
       await supabase.from('gas_meters').update({ is_active: false }).eq('id', meterId);
       revalidatePath('/gas-meters');
+    revalidatePath('/consumption');
       return { success: true, message: 'Meter excluded from Gas Meters.' };
     }
   } catch (err) {

@@ -66,6 +66,7 @@ export async function addEnergyMeter(formData: {
     }
 
     revalidatePath('/energy-meters');
+    revalidatePath('/consumption');
     revalidatePath('/hour-meters');
     revalidatePath('/gas-meters');
     return { success: true, message: `Energy meter "${formData.name}" added!`, id: data.id };
@@ -105,6 +106,7 @@ export async function updateEnergyMeter(
     }
 
     revalidatePath('/energy-meters');
+    revalidatePath('/consumption');
     revalidatePath('/hour-meters');
     revalidatePath('/gas-meters');
     return { success: true, message: `Energy meter "${formData.name}" updated!` };
@@ -154,6 +156,7 @@ export async function updateEnergyMeterQuickAction(
       .eq('id', id);
 
     revalidatePath('/energy-meters');
+    revalidatePath('/consumption');
     revalidatePath('/hour-meters');
     revalidatePath('/gas-meters');
     revalidatePath('/dashboard');
@@ -189,6 +192,7 @@ export async function deleteEnergyMeter(
         // Soft-delete
         await supabase.from('energy_meters').update({ is_active: false }).eq('id', id);
         revalidatePath('/energy-meters');
+    revalidatePath('/consumption');
         return {
           success: true,
           message: 'Meter has existing readings and was deactivated instead of deleted.',
@@ -202,6 +206,7 @@ export async function deleteEnergyMeter(
     }
 
     revalidatePath('/energy-meters');
+    revalidatePath('/consumption');
     return { success: true, message: 'Energy meter deleted.' };
   } catch (err) {
     return { success: false, message: (err as Error).message };
@@ -235,6 +240,7 @@ export async function addEnergyDevice(formData: {
     }
 
     revalidatePath('/energy-meters');
+    revalidatePath('/consumption');
     return { success: true, message: `Device "${formData.checkpoint_label}" added!`, id: data.id };
   } catch (err) {
     return { success: false, message: (err as Error).message };
@@ -266,6 +272,7 @@ export async function updateEnergyDevice(
     }
 
     revalidatePath('/energy-meters');
+    revalidatePath('/consumption');
     return { success: true, message: `Device "${formData.checkpoint_label}" updated!` };
   } catch (err) {
     return { success: false, message: (err as Error).message };
@@ -284,6 +291,7 @@ export async function deleteEnergyDevice(
     }
 
     revalidatePath('/energy-meters');
+    revalidatePath('/consumption');
     return { success: true, message: 'Device deleted.' };
   } catch (err) {
     return { success: false, message: (err as Error).message };
@@ -320,6 +328,7 @@ export async function logEnergyReading(formData: {
     }
 
     revalidatePath('/energy-meters');
+    revalidatePath('/consumption');
     return {
       success: true,
       message:
@@ -361,6 +370,7 @@ export async function batchLogEnergyReadings(
     }
 
     revalidatePath('/energy-meters');
+    revalidatePath('/consumption');
     return {
       success: true,
       message: `${rows.length} reading(s) logged successfully!`,
@@ -442,6 +452,7 @@ export async function toggleMeterInEnergyAction(
       }
 
       revalidatePath('/energy-meters');
+    revalidatePath('/consumption');
       revalidatePath('/hour-meters');
       revalidatePath('/gas-meters');
       return { success: true, message: `"${meter.name}" included in meters!` };
@@ -470,6 +481,7 @@ export async function toggleMeterInEnergyAction(
       }
 
       revalidatePath('/energy-meters');
+    revalidatePath('/consumption');
       revalidatePath('/hour-meters');
       revalidatePath('/gas-meters');
       return { success: true, message: 'Meter excluded from meters.' };
@@ -526,6 +538,7 @@ export async function excludeNonEnergyMetersAction(): Promise<{
     }
 
     revalidatePath('/energy-meters');
+    revalidatePath('/consumption');
     return {
       success: true,
       message: `Excluded ${nonEnergyIds.length} Gas/Hour meter(s) from Energy Meters!`,
@@ -576,6 +589,7 @@ export async function logBranchReading(formData: {
     revalidatePath('/log-reading');
     revalidatePath('/history');
     revalidatePath('/energy-meters');
+    revalidatePath('/consumption');
     revalidatePath('/dashboard');
     return {
       success: true,
@@ -623,6 +637,7 @@ export async function updateBranchReading(
     revalidatePath('/log-reading');
     revalidatePath('/history');
     revalidatePath('/energy-meters');
+    revalidatePath('/consumption');
     revalidatePath('/dashboard');
     return { success: true, message: 'Log reading updated successfully!' };
   } catch (err) {
@@ -642,6 +657,7 @@ export async function deleteBranchReading(
     revalidatePath('/log-reading');
     revalidatePath('/history');
     revalidatePath('/energy-meters');
+    revalidatePath('/consumption');
     revalidatePath('/dashboard');
     return { success: true, message: 'Log reading deleted successfully!' };
   } catch (err) {

@@ -630,11 +630,18 @@ function DomainMeterBadge({ meter, domain, tierLabels }: { meter: Meter; domain:
                   fill="none"
                   stroke="currentColor"
                   strokeWidth="2.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
                   className={`shrink-0 transition-transform duration-200 ${
-                    isCollapsed ? '-rotate-90 text-text-muted' : 'rotate-0 text-accent'
+                    isCollapsed ? 'text-text-muted' : 'text-accent'
                   }`}
+                  style={{ transformOrigin: 'center' }}
                 >
-                  <polyline points="6 9 12 15 18 9" />
+                  {isCollapsed ? (
+                    <polyline points="9 6 15 12 9 18" />
+                  ) : (
+                    <polyline points="6 9 12 15 18 9" />
+                  )}
                 </svg>
                 <span className="truncate text-xs font-semibold">{meter.name}</span>
                 <span className="text-[10px] font-normal px-1.5 py-0.2 rounded-full bg-accent/15 text-accent shrink-0">
@@ -919,7 +926,7 @@ function DomainMeterBadge({ meter, domain, tierLabels }: { meter: Meter; domain:
                                 className="flex items-center gap-1 px-2 py-0.5 rounded bg-bg-surface hover:bg-bg-surface-hover text-accent font-medium transition-colors border border-border/60 cursor-pointer text-[11px]"
                                 title={isAllMetersExpanded ? 'Collapse all branches' : 'Expand all branches'}
                               >
-                                <span className="text-[10px]">▼</span>
+                                <span className="text-[10px]">{isAllMetersExpanded ? '▲' : '▼'}</span>
                                 <span>{isAllMetersExpanded ? 'Collapse All' : 'Expand All'}</span>
                               </button>
                             )}

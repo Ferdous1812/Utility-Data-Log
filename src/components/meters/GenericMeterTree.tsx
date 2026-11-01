@@ -283,9 +283,14 @@ function SectionAccordion({
               strokeWidth="2"
               strokeLinecap="round"
               strokeLinejoin="round"
-              className={`transition-transform duration-200 ${open ? 'rotate-180' : ''}`}
+              className={`transition-transform duration-200 ${open ? 'rotate-180 text-accent' : 'text-text-muted'}`}
+              style={{ transformOrigin: 'center' }}
             >
-              <polyline points="6 9 12 15 18 9" />
+              {open ? (
+                <polyline points="18 15 12 9 6 15" />
+              ) : (
+                <polyline points="6 9 12 15 18 9" />
+              )}
             </svg>
           </button>
         </div>
@@ -578,11 +583,18 @@ function MeterTableRow({
                   fill="none"
                   stroke="currentColor"
                   strokeWidth="2.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
                   className={`shrink-0 transition-transform duration-200 ${
-                    isCollapsed ? '-rotate-90 text-text-muted' : 'rotate-0 text-accent'
+                    isCollapsed ? 'text-text-muted' : 'text-accent'
                   }`}
+                  style={{ transformOrigin: 'center' }}
                 >
-                  <polyline points="6 9 12 15 18 9" />
+                  {isCollapsed ? (
+                    <polyline points="9 6 15 12 9 18" />
+                  ) : (
+                    <polyline points="6 9 12 15 18 9" />
+                  )}
                 </svg>
                 <span className="truncate text-xs font-semibold text-text-primary" title={meter.name}>
                   {meter.name}
@@ -1240,7 +1252,7 @@ export function GenericMeterTree({
             className="flex items-center gap-1 text-[11px] text-text-muted hover:text-accent font-medium transition-colors cursor-pointer px-2 py-0.5 rounded bg-bg-surface hover:bg-bg-surface-hover border border-border/60"
             title={isExpanded ? 'Collapse all' : 'Expand all'}
           >
-            <span className="text-[10px]">▼</span>
+            <span className="text-[10px]">{isExpanded ? '▲' : '▼'}</span>
             <span>{isExpanded ? 'Collapse All' : 'Expand All'}</span>
           </button>
         </div>

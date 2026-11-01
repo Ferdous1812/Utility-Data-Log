@@ -334,6 +334,7 @@ export async function logReading(formData: {
   revalidatePath('/history');
   revalidatePath('/log-reading');
   revalidatePath('/energy-meters');
+  revalidatePath('/consumption');
   revalidatePath('/hour-meters');
   revalidatePath('/gas-meters');
 
@@ -485,6 +486,7 @@ export async function updateReadingAction(
   revalidatePath('/history');
   revalidatePath('/log-reading');
   revalidatePath('/energy-meters');
+  revalidatePath('/consumption');
   revalidatePath('/hour-meters');
   revalidatePath('/gas-meters');
 
@@ -576,6 +578,7 @@ export async function deleteReadingAction(readingId: string): Promise<{ success:
   revalidatePath('/history');
   revalidatePath('/log-reading');
   revalidatePath('/energy-meters');
+  revalidatePath('/consumption');
   revalidatePath('/hour-meters');
   revalidatePath('/gas-meters');
 
@@ -878,6 +881,7 @@ export async function addMeter(formData: {
   revalidatePath('/log-reading');
   revalidatePath('/dashboard');
   revalidatePath('/energy-meters');
+  revalidatePath('/consumption');
   revalidatePath('/hour-meters');
   revalidatePath('/gas-meters');
 
@@ -1104,6 +1108,7 @@ export async function updateMeter(
   revalidatePath('/log-reading');
   revalidatePath('/dashboard');
   revalidatePath('/energy-meters');
+  revalidatePath('/consumption');
   revalidatePath('/hour-meters');
   revalidatePath('/gas-meters');
 
@@ -1154,6 +1159,7 @@ export async function deleteMeter(id: string): Promise<{ success: boolean; messa
 
     revalidatePath('/settings');
     revalidatePath('/energy-meters');
+  revalidatePath('/consumption');
     revalidatePath('/hour-meters');
     revalidatePath('/gas-meters');
     return {
@@ -1175,6 +1181,7 @@ export async function deleteMeter(id: string): Promise<{ success: boolean; messa
   revalidatePath('/settings');
   revalidatePath('/dashboard');
   revalidatePath('/energy-meters');
+  revalidatePath('/consumption');
   revalidatePath('/hour-meters');
   revalidatePath('/gas-meters');
 
@@ -1279,6 +1286,7 @@ export async function updateMetersOrder(
   revalidatePath('/log-reading');
   revalidatePath('/dashboard');
   revalidatePath('/energy-meters');
+  revalidatePath('/consumption');
   revalidatePath('/hour-meters');
   revalidatePath('/gas-meters');
 
@@ -1333,6 +1341,7 @@ export async function addMeterSection(
   revalidatePath('/settings');
   revalidatePath('/log-reading');
   revalidatePath('/energy-meters');
+  revalidatePath('/consumption');
   revalidatePath('/hour-meters');
   revalidatePath('/gas-meters');
 
@@ -1385,6 +1394,7 @@ export async function updateMeterSection(
   revalidatePath('/settings');
   revalidatePath('/log-reading');
   revalidatePath('/energy-meters');
+  revalidatePath('/consumption');
   revalidatePath('/hour-meters');
   revalidatePath('/gas-meters');
   revalidatePath('/dashboard');
@@ -1426,6 +1436,7 @@ export async function deleteMeterSection(
   revalidatePath('/settings');
   revalidatePath('/log-reading');
   revalidatePath('/energy-meters');
+  revalidatePath('/consumption');
   revalidatePath('/hour-meters');
   revalidatePath('/gas-meters');
 
@@ -1476,6 +1487,7 @@ export async function renameEquipmentCategory(
 
   revalidatePath('/settings');
   revalidatePath('/energy-meters');
+  revalidatePath('/consumption');
   revalidatePath('/gas-meters');
   revalidatePath('/hour-meters');
   revalidatePath('/dashboard');
@@ -1511,6 +1523,7 @@ export async function deleteEquipmentCategory(
 
   revalidatePath('/settings');
   revalidatePath('/energy-meters');
+  revalidatePath('/consumption');
   revalidatePath('/gas-meters');
   revalidatePath('/hour-meters');
   revalidatePath('/dashboard');

@@ -71,6 +71,7 @@ export async function addHourMeter(formData: {
     });
 
     revalidatePath('/hour-meters');
+    revalidatePath('/consumption');
     return { success: true, message: `Hour meter "${formData.name}" added!`, id: data.id };
   } catch (err) {
     return { success: false, message: (err as Error).message };
@@ -110,6 +111,7 @@ export async function updateHourMeterQuickAction(
     }
 
     revalidatePath('/hour-meters');
+    revalidatePath('/consumption');
     return { success: true, message: `Meter "${trimmedName}" updated!` };
   } catch (err) {
     return { success: false, message: (err as Error).message };
@@ -132,6 +134,7 @@ export async function deleteHourMeter(
     }
 
     revalidatePath('/hour-meters');
+    revalidatePath('/consumption');
     return { success: true, message: 'Hour meter removed.' };
   } catch (err) {
     return { success: false, message: (err as Error).message };
@@ -199,10 +202,12 @@ export async function toggleMeterInHourAction(
       }
 
       revalidatePath('/hour-meters');
+    revalidatePath('/consumption');
       return { success: true, message: `"${meter.name}" included in Hour Meters!` };
     } else {
       await supabase.from('hour_meters').update({ is_active: false }).eq('id', meterId);
       revalidatePath('/hour-meters');
+    revalidatePath('/consumption');
       return { success: true, message: 'Meter excluded from Hour Meters.' };
     }
   } catch (err) {
